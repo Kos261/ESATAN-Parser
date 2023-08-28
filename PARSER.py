@@ -401,8 +401,8 @@ class Parser:
 
 if __name__ == '__main__':
 
-    # excel_path = r"C:\Users\koste\OneDrive\Pulpit\ESATAN_PARSER\1_TCS_FPM_TVAC.xlsx"
-    # bdf_path = "1_TCS_FPM_TVAC.bdf"
-    # parser = Parser(bdf_path,excel_path)
-        print("KUTAZ Długi")
+    excel_path = r"C:\Users\koste\OneDrive\Pulpit\ESATAN_PARSER\1_TCS_FPM_TVAC.xlsx"
+    bdf_path = "1_TCS_FPM_TVAC.bdf"
+    parser = Parser(bdf_path,excel_path)
+    
     
