@@ -109,25 +109,30 @@ class Parser:
             for linia in linie:
                 if linia.startswith('GRID'):
                     floats = []
-                    id_num = re.findall(r'\b\d+\b', linia)[0]
-                    found = re.findall(r'([+-]?\.\d+)|(([+-]?\d+\.\d+)-(\d+))|(0\.)', linia)
+                    id_num = re.findall(r'\b\d+\b', linia)[0]    
+                    #Tutaj jest źle. W 2 plikach wykrywa zero na początku a w jednym wykrywa na końcu
+                                        #-.1231       #-4.895-3               #tylko 0.
+                    found = re.findall(r'([+-]?\.\d+)|(([+-]?\d+\.\d+)-(\d+))|(?<!\d)0\.(?!\d)', linia)
+                    print(found)
                     for Duple in found:     #Tutaj trzeba się dokopać do tych liczb
                         for num in Duple:
                             if num == '':
                                 continue
-                            
-                            elif re.match(r'0\.',num):
+                            elif re.match(r'(?<!\d)0\.(?!\d)',num):
                                 floats.append(num)
 
-                            elif re.match(r'([+-]?\d+\.\d+)-(\d+)', num):
+                            elif re.match(r'([+-]?\d+\.\d+)-(\d+)', num): 
                                 floats.append(self.convert_engi(Duple[2],Duple[3]))
 
                             elif re.match(r'([+-]?\.\d+)',num):
                                 floats.append(num)
 
-                    floats = [format(float(i),'.8f') for i in floats] 
+                            
+                    
+                    floats = [format(float(i),'.8f') for i in floats]
+                    #print(floats) 
                     punkt = Point(id_num,floats[0],floats[1],floats[2])
-                    # print(punkt.get_pos())
+                    
                     self.points.append(punkt)
 
 
@@ -182,26 +187,14 @@ class Parser:
 
             print("\tErg file created succesfully")
 
+    def check_id(self,row,moje_id):
+        if pd.notnull(row['nodenumbers of side 1']) and pd.notnull(row['End Ids']):
+            return row['nodenumbers of side 1'] <= moje_id <= row['End Ids']
+        else:
+            return False
     
-        
-    # def check_primitive_id(self,row,moje_id):
-    #     if pd.notnull(row['nodenumbers of side 1']) and pd.notnull(row['End Ids']):
-    #         return row['nodenumbers of side 1'] <= moje_id <= row['End Ids']
-    #     else:
-    #         return False
-
-    # def write_primitives(self,moj_id):
-    #     pasujacy_wiersz = self.hierarchy[self.hierarchy.apply(self.check_id, args=(moj_id,), axis=1)]
-    #     #print(pasujacy_wiersz)
-
-    def check_hier_id(self,row,moje_id):
-            if pd.notnull(row['nodenumbers of side 1']) and pd.notnull(row['End Ids']):
-                return row['nodenumbers of side 1'] <= moje_id <= row['End Ids']
-            else:
-                return False
-
-    def add_one_figure(self,moj_id):
-        pasujacy_wiersz = self.hierarchy[self.hierarchy.apply(self.check_hier_id, args=(moj_id,), axis=1)]
+    def write_row(self,moj_id):
+        pasujacy_wiersz = self.hierarchy[self.hierarchy.apply(self.check_id, args=(moj_id,), axis=1)]
         #print(pasujacy_wiersz)
 
         self.file.write(f'sense = 1,\nmeshType1 = "regular",\nnodes1 = 1,\nratio1 = 1.00000000,\nmeshType2 = "regular",\nnodes2 = 1,\nratio2 = 1.00000000,\nanalysis_type = "Lumped Parameter",\nlabel1 = "",\n')
@@ -230,25 +223,24 @@ class Parser:
 
         self.file.write('bulk1 = [-10000.00000000, -10000.00000000, -10000.00000000],\nthick1 = 0.00000000,\nbulk2 = [-10000.00000000, -10000.00000000, -10000.00000000],\nthick2 = 0.00000000,\n')
         self.file.write(f'through_cond = "{pasujacy_wiersz["throughCond"].to_string(index=False)}",\n')
-        self.file.write('conductance = 0.00000000,\nemittance = 0.00000000);')    
+        self.file.write('conductance = 0.00000000,\nemittance = 0.00000000);')
+        
+
+        #TUTAJ CHYBA DODAM SELF.FILE WRITE ITD
 
     def add_shells(self): 
         #Rozpoznawanie figur i dodawanie ich do osobnych list
         for rec in self.cquad4:
-            # if rec.get_id():
-            #     pass
-            # else:
-            p1,p2,p3,p4 = rec.get_points()
+            #print(rec)
+            p1,p2,p3,p4 = rec.get_points()      #Tutaj jak nie działa to musi być tak quad_{rec.get_id()}
             self.file.write(f"\n\nGEOMETRY {rec};\n{rec} = SHELL_QUADRILATERAL(\npoint1 = point_{p1},\npoint2 = point_{p2},\npoint3 = point_{p3},\npoint4 = point_{p4},\n")
-            self.add_one_figure(rec.get_id())
+            self.write_row(rec.get_id())
 
         for tria in self.ctria3:
-            # if rec.get_id():
-            #     pass
-            # else:
             p1,p2,p3 = tria.get_points()
+            #print(f"{tria} wierzcholki {p1.get_pos()} {p2.get_pos()} {p3.get_pos()}")
             self.file.write(f"\n\nGEOMETRY {tria};\n{tria} = SHELL_TRIANGLE(\npoint1 = point_{p1},\npoint2 = point_{p2},\npoint3 = point_{p3},\n")
-            self.add_one_figure(tria.get_id())
+            self.write_row(tria.get_id())
 
     def add_bulks(self):
         materials = self.hierarchy[['bulk1','bulk2']].stack().dropna().unique()
@@ -403,6 +395,5 @@ if __name__ == '__main__':
 
     excel_path = r"C:\Users\koste\OneDrive\Pulpit\ESATAN_PARSER\1_TCS_FPM_TVAC.xlsx"
     bdf_path = "1_TCS_FPM_TVAC.bdf"
+
     parser = Parser(bdf_path,excel_path)
-    
-    
