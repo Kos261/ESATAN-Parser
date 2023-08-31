@@ -112,13 +112,13 @@ class Parser:
                     id_num = re.findall(r'\b\d+\b', linia)[0]    
                     #Tutaj jest źle. W 2 plikach wykrywa zero na początku a w jednym wykrywa na końcu
                                         #-.1231       #-4.895-3               #tylko 0.
-                    found = re.findall(r'([+-]?\.\d+)|(([+-]?\d+\.\d+)-(\d+))|(?<!\d)0\.(?!\d)', linia)
-                    print(found)
-                    for Duple in found:     #Tutaj trzeba się dokopać do tych liczb
+                    found = re.findall(r'([+-]?\.\d+)|(([+-]?\d+\.\d+)-(\d+))|(\s0\.\s)', linia)
+                    # print(found)
+                    for Duple in found:
                         for num in Duple:
                             if num == '':
                                 continue
-                            elif re.match(r'(?<!\d)0\.(?!\d)',num):
+                            elif re.match(r'(\s0\.\s)',num):
                                 floats.append(num)
 
                             elif re.match(r'([+-]?\d+\.\d+)-(\d+)', num): 
@@ -127,12 +127,9 @@ class Parser:
                             elif re.match(r'([+-]?\.\d+)',num):
                                 floats.append(num)
 
-                            
-                    
+
                     floats = [format(float(i),'.8f') for i in floats]
-                    #print(floats) 
                     punkt = Point(id_num,floats[0],floats[1],floats[2])
-                    
                     self.points.append(punkt)
 
 
