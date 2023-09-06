@@ -1,4 +1,4 @@
-BEGIN_MODEL FCU_HA_v03
+BEGIN_MODEL /Users/koste/OneDrive/Pulpit/ESATAN_PARSER/1_FCU_HA_v03/1_FCU_HA_v03
 
 /*KONSTANTY KLOSIEWICZ*/
 
@@ -46691,7 +46691,7 @@ HA_Bottom = HA_BOTTOM_2_5 + HA_BOTTOM_3 + HA_BOTTOM_RIBS;
 /*               ASSEMBLY               */
 /*--------------------------------------*/
 
-FCU_HA_v03 = HA_Side_Plate_PZ + HA_Side_Plate_MZ + HA_Cold_Plate_PX + HA_Cold_Plate_MX + HA_Bottom + HA_Top_shield;
+/Users/koste/OneDrive/Pulpit/ESATAN_PARSER/1_FCU_HA_v03/1_FCU_HA_v03 = HA_Side_Plate_PZ + HA_Side_Plate_MZ + HA_Cold_Plate_PX + HA_Cold_Plate_MX + HA_Bottom + HA_Top_shield;
 
 /****************************************/
 
