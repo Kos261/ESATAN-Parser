@@ -1,15 +1,27 @@
-import pandas as pd
-import re
+class Primitive:
+    def __init__(self,name,id,*args):
+        self.punkty = args
+        self.id = id
+        self.name = name
+        if len(args) >= 3:
+            self.p1 = args[0]
+            self.p2 = args[1]
+            self.p3 = args[2]
+        if len(args) >= 4:
+            self.p4 = args[3]
 
-tekst1 = "GRID      720008       0  -.0225-9.966-3.9274056       0"
-tekst2 = "GRID      720049       0  -5.-3.0465932.8940374       0"
-tekst3 = "GRID           9       0-.060285-.054981      0.       0"
+    def __str__(self):
+        return f"{self.name}_{self.id}"
 
-          #.123         -5.123-3              ' '0.' '    -5.-3
-regex = r'([+-]?\.\d+)|(([+-]?\d\.\d+)-(\d))|(\s0\.\s)|(([+-]?\d\.)-(\d))'
-liczba1 = re.findall(regex,tekst1)
-liczba2 = re.findall(regex,tekst2)
-liczba3 = re.findall(regex,tekst3)
-print(liczba1)
-print(liczba2)
-print(liczba3)
+    def get_id(self):
+        return self.id
+    
+    def get_points(self):
+        if len(self.punkty) == 3:
+            return self.p1, self.p2, self.p3
+        elif len(self.punkty) == 4:
+            return self.p1, self.p2, self.p3, self.p4
+
+
+Box = Primitive("box",123,1,2,3,4)
+print(Box)

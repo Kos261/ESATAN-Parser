@@ -33,6 +33,9 @@ class Rectangle:
 
     def __str__(self):
         return f"quad_{self.id}"
+    
+    def BIG(self):
+        return "SHELL_QUADRILATERAL"
 
     def get_id(self):
         return self.id
@@ -50,6 +53,9 @@ class Triangle:
     def __str__(self):
         return f"tria_{self.id}"
     
+    def BIG(self):
+        return f"SHELL_TRIANGLE"
+    
     def get_id(self):
         return self.id
     
@@ -57,34 +63,57 @@ class Triangle:
         return self.p1, self.p2, self.p3
 
 class Primitive:
-    def __init__(self,name,id):
+    def __init__(self,name,id,*args):
         self.id = id
-        self.name = name
+        self.name = name.lower()
+        self.node_num = len(args)
+        if len(args) >= 3:
+            self.p1 = args[0]
+            self.p2 = args[1]
+            self.p3 = args[2]
+        if len(args) >= 4:
+            self.p4 = args[3]
 
     def __str__(self):
         return f"{self.name}_{self.id}"
+    
+    def BIG(self):
+        return f"SHELL_{self.name.upper()}"
 
     def get_id(self):
         return self.id
 
+    def get_points(self):
+        if self.node_num == 3:
+            return self.p1, self.p2, self.p3
+        if self.node_num == 4:
+            return self.p1, self.p2, self.p3, self.p4
+        else:
+            return "DUPA"
 
 class Parser:
+
     def __init__(self,bdffile,excelfile):
         print("\n#############################################\n")
-        self.points = []
-        self.ctria3 = []
-        self.cquad4 = []
-        self.any_primitive = []
+        
         self.bdffile = bdffile
         self.excelfile = excelfile
+        self.all_geometry = []
+        self.any_primitive = []
+        self.cquad4 = []
+        self.ctria3 = []
+        self.points = []
+        self.shell1 = []
+        self.shell2 = []
         self.load_excel_data()
         self.load_bdf_data()
+        self.transform_to_primitives()
         self.get_file_name()
         self.nowy_plikERG()
         print("\n#############################################\n")
 
     def get_file_name(self):
-        self.filename = self.bdffile.split("\\")[-1]
+        self.filename = self.bdffile.split(r'/')[-1]
         self.filename = self.filename.split(".")[-2]
         self.modelname = self.filename[2:]
         print(f"\tNazwa pliku: {self.filename}\n")
@@ -94,6 +123,14 @@ class Parser:
 
         self.primitives = pd.read_excel(self.excelfile,sheet_name="PRIMITIVES",na_filter = Filter)
         self.primitives = self.primitives.iloc[:,list(range(8)) + [9]]
+        new_column_names = ["Primitives","node number","Config","Cutting","nodes 1","nodes 2","ratio1","ratio2","CAUTION"]
+        self.primitives.columns = new_column_names
+        self.primitives['node number'] = self.primitives['node number'].apply(lambda x: str(x) if pd.notna(x) else x)
+        # Usunięcie zer i kropek
+        self.primitives['node number'] = self.primitives['node number'].str.replace(r'\.0', '', regex=True)
+        # Zamiana z powrotem na typ int (opcjonalnie)
+        self.primitives['node number'] = self.primitives['node number'].apply(lambda x: int(x) if pd.notna(x) else x)
+        #print(self.primitives)
         
         self.cuts = pd.read_excel(self.excelfile,sheet_name="CUTS",na_filter = Filter)
         self.cuts = self.cuts.loc[:,["CUT Name","SHELL 1","SHELL 2"]]
@@ -157,10 +194,10 @@ class Parser:
                 
                 elif linia.startswith('CQUAD4'):
                     dane = re.findall(r'[-+]?\d*\.\d+|\d+', linia)
-                    
                     figura = Rectangle(int(dane[1]),int(dane[3]), int(dane[4]), int(dane[5]),int(dane[6]))
                     self.cquad4.append(figura)
 
+        self.all_geometry = self.ctria3+self.cquad4
         print("\n\tBDF data loaded succesfully\n")
         return
     
@@ -168,6 +205,29 @@ class Parser:
             wynik = (float(base_number)) * 10 ** (-int(exp))
             return wynik
     
+    def transform_to_primitives(self):
+        print("\tSzukanie prymitywów")
+        for index, item in enumerate(self.all_geometry):
+            Id = item.get_id()
+            wiersz_prim = self.primitives[self.primitives.apply(self.check_id_prim, args=(Id,),axis=1)]
+            if not wiersz_prim.empty:
+                primitive_name = wiersz_prim["Primitives"].values[0]
+                if isinstance(item,Triangle):
+                    p1,p2,p3 = item.get_points()
+                    primitive = Primitive(primitive_name,Id,p1,p2,p3)
+                    self.any_primitive.append(primitive)
+                    self.all_geometry[index] = primitive
+                elif isinstance(item,Rectangle):
+                    p1,p2,p3,p4 = item.get_points()
+                    primitive = Primitive(primitive_name,Id,p1,p2,p3,p4)
+                    self.any_primitive.append(primitive)
+                    self.all_geometry[index] = primitive
+            else:
+                continue
+        # for item in self.all_geometry:
+        #     if isinstance(item,Primitive):
+        #         print("\t",item) 
+
     def nowy_plikERG(self): #TUTAJ JEST TWORZONY PLIK
         with open(f"{self.filename}.erg","w") as self.file:
             self.file.write(f"BEGIN_MODEL {self.filename[2:]}\n")
@@ -205,51 +265,36 @@ class Parser:
             print("\tErg file created succesfully")
 
     def add_shells(self): 
-        #TUTAJ TRZEBA POŁĄCZYĆ TRÓJKĄTY,PROSTOKĄTY I PRYMITYWY I DLA WSZYSTKIEGO SPRAWDZAĆ CZY JEST W HIERARCHII I PRYMITYWACH. PRYMITYWY MAJĄ NIEKTÓRE CECHY Z HIERARCHII A NIEKTÓRE Z PRYMITIVES
-        #PROSTOKĄTY                 
-        for rec in self.cquad4:
-            p1,p2,p3,p4 = rec.get_points() 
-            wiersz_hier = self.hierarchy[self.hierarchy.apply(self.check_id_hier, args=(rec.get_id(),), axis=1)]
-            wiersz_prim = self.primitives[self.primitives.apply(self.check_id_prim, args=(rec.get_id(),),axis=1)]
+        for figure in self.all_geometry:
             
-            if not wiersz_hier.empty:
-                self.file.write(f"\n\nGEOMETRY {rec};\n{rec} = SHELL_QUADRILATERAL(\npoint1 = point_{p1},\npoint2 = point_{p2},\npoint3 = point_{p3},\npoint4 = point_{p4},\n")
-                self.add_one_figure_hier(rec.get_id(),wiersz_hier)
+            Id = figure.get_id()
+            wiersz_hier = self.hierarchy[self.hierarchy.apply(self.check_id_hier, args=(Id,), axis=1)]
+            
+            if isinstance(figure,Triangle):
+                p1,p2,p3 = figure.get_points()
+                self.file.write(f"\n\nGEOMETRY {figure};\n{figure} = SHELL_TRIANGLE(\npoint1 = point_{p1},\npoint2 = point_{p2},\npoint3 = point_{p3},\n")
+                self.add_one_figure_hier(Id,wiersz_hier)
 
+            elif isinstance(figure,Rectangle):
+                p1,p2,p3,p4 = figure.get_points() 
+                self.file.write(f"\n\nGEOMETRY {figure};\n{figure} = SHELL_QUADRILATERAL(\npoint1 = point_{p1},\npoint2 = point_{p2},\npoint3 = point_{p3},\npoint4 = point_{p4},\n")
+                self.add_one_figure_hier(Id,wiersz_hier)
 
-            #TUTAJ ZAMIENIĘ TO NA OBIEKT PRYMITYW O TYCH CECHACH
-            elif not wiersz_prim.empty:
-                print("W PRIM")
-                Id = wiersz_prim.loc["node number"]
-                prymityw = wiersz_prim.loc["Primitives"]
-                Prymityw = prymityw.upper()
-                self.file.write(f"\n\nGEOMETRY {prymityw}_{Id};\n{prymityw}_{Id} = SHELL_{Prymityw}(\npoint1 = point_{p1},\npoint2 = point_{p2},\npoint3 = point_{p3},\npoint4 = point_{p4},\n")
-                self.add_one_figure_prim(rec.get_id(),wiersz_prim,wiersz_hier)
-
-            else:
-                print("ID nie ma na żadnej tabeli")
-
-        #TRÓJKĄTY
-        for tria in self.ctria3:
-            p1,p2,p3 = tria.get_points()
-            wiersz_hier = self.hierarchy[self.hierarchy.apply(self.check_id_hier, args=(tria.get_id(),), axis=1)]
-            wiersz_prim = self.primitives[self.primitives.apply(self.check_id_prim, args=(tria.get_id(),),axis=1)]
-
-            if not wiersz_hier.empty:
-                self.file.write(f"\n\nGEOMETRY {tria};\n{tria} = SHELL_TRIANGLE(\npoint1 = point_{p1},\npoint2 = point_{p2},\npoint3 = point_{p3},\n")
-                self.add_one_figure_hier(tria.get_id(),wiersz_hier)
-
-            #Tu trzeba dokończyć
-            elif not wiersz_prim.empty:     
-                print("W PRIM")
-                Id = wiersz_prim.loc["node number"]
-                prymityw = wiersz_prim.loc["Primitives"]
-                Prymityw = prymityw.upper()
-                self.file.write(f"\n\nGEOMETRY {prymityw}_{Id};\n{prymityw}_{Id} = SHELL_{Prymityw}(\npoint1 = point_{p1},\npoint2 = point_{p2},\npoint3 = point_{p3},\n")
-                self.add_one_figure_prim(rec.get_id(),wiersz_prim,wiersz_hier)
+            elif isinstance(figure,Primitive):
+                wiersz_prim = self.primitives[self.primitives.apply(self.check_id_prim, args=(Id,),axis=1)]
+            
+                if figure.node_num == 3:
+                    p1,p2,p3 = figure.get_points()
+                    self.file.write(f"\n\nGEOMETRY {figure};\n{figure} = {figure.BIG()}(\npoint1 = point_{p1},\npoint2 = point_{p2},\npoint3 = point_{p3},\n")
+                    self.add_one_figure_prim(Id,wiersz_prim,wiersz_hier)
+                    
+                if figure.node_num == 4:
+                    p1,p2,p3,p4 = figure.get_points()
+                    self.file.write(f"\n\nGEOMETRY {figure};\n{figure} = {figure.BIG()}(\npoint1 = point_{p1},\npoint2 = point_{p2},\npoint3 = point_{p3},\npoint4 = point_{p4},\n")
+                    self.add_one_figure_prim(Id,wiersz_prim,wiersz_hier)
 
             else:
-                print("ID nie ma na żadnej tabeli")
+                print("Figura źle zdefiniowana")
 
     def check_id_hier(self,row,moje_id):
         if pd.notnull(row['nodenumbers of side 1']) and pd.notnull(row['End Ids']):
@@ -291,29 +336,32 @@ class Parser:
         self.file.write('conductance = 0.00000000,\nemittance = 0.00000000);')
         
     def add_one_figure_prim(self,moj_id,wiersz_prim,wiersz_hier):
-        if wiersz_prim.loc["CUTTING SENSE Inside: sense = -1, Outside: sense = 1"] == "OUTSIDE":
+        
+        if wiersz_prim["Cutting"].values[0] == "OUTSIDE":
             self.file.write(f'sense = 1,\n')
-        elif wiersz_prim.loc["CUTTING SENSE Inside: sense = -1, Outside: sense = 1"] == "INSIDE":
+        elif wiersz_prim["Cutting"].values[0] == "INSIDE":
             self.file.write(f'sense = -1,\n')
 
-        if wiersz_prim.loc[ "CONFIG          O:Original S:Section C:Cropped CS: Cropped/Section"] == "O":
-            self.file.write(f'\n')
-        elif wiersz_prim.loc["CONFIG          O:Original S:Section C:Cropped CS: Cropped/Section"] == "S":
-            self.file.write(f'\n')
-        elif wiersz_prim.loc["CONFIG          O:Original S:Section C:Cropped CS: Cropped/Section"] == "C":
-            self.file.write(f'\n')
-        elif wiersz_prim.loc["CONFIG          O:Original S:Section C:Cropped CS: Cropped/Section"] == "CS":
-            self.file.write(f'\n')                          
+        # if wiersz_prim["Config"].values[0] == "O":
+        #     self.file.write(f'')
+        # elif wiersz_prim["Config"].values[0] == "S":          #NA RAZIE TO JEST ARTEFAKT
+        #     self.file.write(f'')
+        # elif wiersz_prim["Config"].values[0] == "C":
+        #     self.file.write(f'')
+        # elif wiersz_prim["Config"].values[0] == "CS":
+        #     self.file.write(f'')                          
                             
         self.file.write('meshType1 = "regular",\n')
-        self.file.write(f"nodes1 = {wiersz_prim.loc['nodes 1: Elements circumreference']},\n")
-        self.file.write("meshType2 = 'regular',\n")
-        self.file.write(f"ratio1 = {wiersz_prim.loc['ratio1']},\n")
-        self.file.write(f"nodes2 = {wiersz_prim.loc['nodes 2: Elements length']},\n")
-        self.file.write(f"ratio2 = {wiersz_prim.loc['ratio2']},\n")
-        #W sumie mam jeszcze pytanie czy jak tworzę figurę z primitives to czy ona potem ma te wszystkie parametry co figury w hierarchii? Bo ID znajduje się chyba albo w hierarchii albo primitives. Czy może być i tu i tu?
+        nodes1 = int(wiersz_prim['nodes 1'].values[0])
+        self.file.write(f"nodes1 = {nodes1},\n")
+        self.file.write('meshType2 = "regular",\n')
+        ratio1 = format(wiersz_prim['ratio1'].values[0],'8f')
+        self.file.write(f"ratio1 = {ratio1},\n")
+        nodes2 = int(wiersz_prim['nodes 2'].values[0])
+        self.file.write(f"nodes2 = {nodes2},\n")
+        ratio2 = format(wiersz_prim['ratio2'].values[0],'8f')
+        self.file.write(f"ratio2 = {ratio2},\n")
 
-        #wiersz_hier
         self.file.write('analysis_type = "Lumped Parameter",\nlabel1 = "",\n')
         side1 = wiersz_hier["act1"].to_string(index=False)
         self.file.write(f'side1 = "{side1[0].upper()+side1[1:].lower()}",\n')
@@ -336,7 +384,7 @@ class Parser:
         self.file.write(f'thick = {liczba},\n')
 
         self.file.write('bulk1 = [-10000.00000000, -10000.00000000, -10000.00000000],\nthick1 = 0.00000000,\nbulk2 = [-10000.00000000, -10000.00000000, -10000.00000000],\nthick2 = 0.00000000,\n')
-        self.file.write(f'through_cond = "{wiersz_prim["throughCond"].to_string(index=False)}",\n')
+        self.file.write(f'through_cond = "{wiersz_hier["throughCond"].to_string(index=False)}",\n')
         self.file.write('conductance = 0.00000000,\nemittance = 0.00000000);')
 
     def add_bulks(self):
@@ -367,7 +415,6 @@ class Parser:
             self.file.write(f'\nOPTICAL {coat} = [{tekst}];')
 
     def make_material_dict(self):
-        self.wszystkie_geometrie = [item for item in self.ctria3+self.cquad4]
         dictionary = {}
                                                         #Dictionary żeby dopasować figury do materiału
         for _ , row in self.hierarchy.iterrows():
@@ -386,7 +433,7 @@ class Parser:
         for k,v in dictionary.items():
             materiały = {k:[] for k,v in dictionary.items()}
 
-        for item in self.wszystkie_geometrie:                #Tutaj sprawdzam czy prymityw geometryczny jest 
+        for item in self.all_geometry:                #Tutaj sprawdzam czy prymityw geometryczny jest 
             for key,ids in dictionary.items():          #w przedziale id-endid. Jeśli tak to dodaję do materiału
                 if ids[0] <= item.get_id() <= ids[1]:
                     materiały[key].append(str(item))
@@ -395,6 +442,8 @@ class Parser:
         return materiały
     
     def add_cuts(self):
+        for item in self.any_primitive:
+            print(item.get_id())
         for index,row in self.cuts.iterrows():
             if not row.isnull().all():
                 print(row[0],row[1],row[2])
@@ -402,7 +451,7 @@ class Parser:
                 shell2 = re.findall(r'\b\d+\b',row[2])
                 print(shell1,shell2)
 
-            # for item in self.wszystkie_geometrie:
+            # for item in self.all_geometry:
             #     if self.fig_in_cuts()
 
             #self.file.write(f"\nGEOMETRY cut_{row.loc['CUT Name']};\ncut_{row.loc['CUT Name']} = ")
@@ -519,7 +568,7 @@ if __name__ == '__main__':
     #Po co, założenia, Idiotoodporne, Kod do pobrania i co trzeba pobrać, żeby dało się zmienić
 
 
-    excel_path = r"C:\Users\koste\OneDrive\Pulpit\ESATAN_PARSER\2_FGS_TA_Rv04\2_FGS_TA_Rv04.xlsx"
-    bdf_path = r"C:\Users\koste\OneDrive\Pulpit\ESATAN_PARSER\2_FGS_TA_Rv04\2_FGS_TA_Rv04.bdf"
+    excel_path = r"C:/Users/koste/OneDrive/Pulpit/ESATAN_PARSER/8_EROS_DU_v01/8_EROS_DU_v01.xlsx"
+    bdf_path = r"C:/Users/koste/OneDrive/Pulpit/ESATAN_PARSER/8_EROS_DU_v01/8_EROS_DU_v01.bdf"
 
     parser = Parser(bdf_path,excel_path)

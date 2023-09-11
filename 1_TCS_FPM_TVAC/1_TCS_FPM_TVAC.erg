@@ -1,4 +1,4 @@
-BEGIN_MODEL ST
+BEGIN_MODEL /Users/koste/OneDrive/Pulpit/ESATAN_PARSER/1_TCS_FPM_TVAC/1_TCS_FPM_TVAC
 
 /*KONSTANTY KLOSIEWICZ*/
 
@@ -370,6 +370,45 @@ POINT point_110019 = [-0.11528500, -0.01748100, -0.20000000];
 /*--------------------------------------*/
 /*                 SHELLS               */
 /*--------------------------------------*/
+
+GEOMETRY quad_100000;
+quad_100000 = SHELL_QUADRILATERAL(
+point1 = point_100011,
+point2 = point_100007,
+point3 = point_100000,
+point4 = point_100009,
+sense = 1,
+meshType1 = "regular",
+nodes1 = 1,
+ratio1 = 1.00000000,
+meshType2 = "regular",
+nodes2 = 1,
+ratio2 = 1.00000000,
+analysis_type = "Lumped Parameter",
+label1 = "",
+side1 = "Active",
+criticality1 = "NORMAL",
+nbase1 = 100000,
+ndelta1 = 0,
+opt1 = OPT_Al6061_T6,
+colour1 = "BLUE",
+label2 = "",
+side2 = "Conductive",
+criticality2 = "NORMAL",
+nbase2 = 100000,
+ndelta2 = 0,
+opt2 = OPT_Al6061_T6,
+colour2 = "BLUE",
+composition = "SINGLE",
+bulk = Alu_6061_T6,
+thick = 0.00602000,
+bulk1 = [-10000.00000000, -10000.00000000, -10000.00000000],
+thick1 = 0.00000000,
+bulk2 = [-10000.00000000, -10000.00000000, -10000.00000000],
+thick2 = 0.00000000,
+through_cond = "BULK",
+conductance = 0.00000000,
+emittance = 0.00000000);
 
 GEOMETRY quad_100001;
 quad_100001 = SHELL_QUADRILATERAL(
@@ -9547,7 +9586,7 @@ emittance = 0.00000000);
 /*--------------------------------------*/
 
 GEOMETRY FPM;
-FPM = quad_100001 + quad_100002 + quad_100003 + quad_100004 + quad_100005 + quad_100006 + quad_100007 + quad_100008 + quad_100009 + quad_100010 + quad_100011 + quad_100012 + quad_100013 + quad_100014 + quad_100015 + quad_100016 + quad_100017 + quad_100018 + quad_100019 + quad_100100 + quad_100101;
+FPM = quad_100000 + quad_100001 + quad_100002 + quad_100003 + quad_100004 + quad_100005 + quad_100006 + quad_100007 + quad_100008 + quad_100009 + quad_100010 + quad_100011 + quad_100012 + quad_100013 + quad_100014 + quad_100015 + quad_100016 + quad_100017 + quad_100018 + quad_100019 + quad_100100 + quad_100101;
 
 GEOMETRY Detector;
 Detector = quad_110000 + quad_110001 + quad_110002 + quad_110003 + quad_110004 + quad_110005 + quad_110006 + quad_110007 + quad_110100 + quad_110101;
@@ -9605,7 +9644,7 @@ PEEK_Legs = P_L_MZ_MX + P_L_MZ_PX + P_L_PZ_MX + P_L_PZ_PX;
 /*               ASSEMBLY               */
 /*--------------------------------------*/
 
-ST = FPM + Detector + Base_Plate + TOB + Thermal_strap_TOB + Adapter_Plate + Cold_Plate + PEEK_Legs;
+/Users/koste/OneDrive/Pulpit/ESATAN_PARSER/1_TCS_FPM_TVAC/1_TCS_FPM_TVAC = FPM + Detector + Base_Plate + TOB + Thermal_strap_TOB + Adapter_Plate + Cold_Plate + PEEK_Legs;
 
 /****************************************/
 

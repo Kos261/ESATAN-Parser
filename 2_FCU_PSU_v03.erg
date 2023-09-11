@@ -1,4 +1,4 @@
-BEGIN_MODEL /Users/koste/OneDrive/Pulpit/ESATAN_PARSER/2_FCU_PSU_v03/2_FCU_PSU_v03
+BEGIN_MODEL FCU_PSU_v03
 
 /*KONSTANTY KLOSIEWICZ*/
 
@@ -112659,7 +112659,7 @@ PSU_PZ = PSU_FRAME_PZ + PSU_CMD_PZ + PSU_PCB_PZ + PSU_FP_PZ + PSU_NVENT_PZ + PSU
 /*               ASSEMBLY               */
 /*--------------------------------------*/
 
-/Users/koste/OneDrive/Pulpit/ESATAN_PARSER/2_FCU_PSU_v03/2_FCU_PSU_v03 = PSU_MZ + PSU_PZ;
+FCU_PSU_v03 = PSU_MZ + PSU_PZ;
 
 /****************************************/
 
