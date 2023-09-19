@@ -14,6 +14,7 @@ from PARSER import Parser,Point,Triangle,Rectangle
 class Ui(QtWidgets.QMainWindow):
     def __init__(self, *args, **kwargs):
         super(Ui,self).__init__(*args,**kwargs)
+        self.my_folder = r"C:\Users\koste\OneDrive\Pulpit\ESATAN_PARSER" #Tutaj zmienić na home
         self.two_files_selected = False
         self.BDF_filename = None
         self.excel_filename = None
@@ -24,7 +25,8 @@ class Ui(QtWidgets.QMainWindow):
         gridLayout = QtWidgets.QGridLayout()
         widget = QtWidgets.QWidget()
         widget.setLayout(gridLayout)         
-        self.setCentralWidget(widget)    
+        self.setCentralWidget(widget)  
+          
 
         ###TWORZYMY WIDGETY I USTAWIAMY JE###
         
@@ -54,7 +56,7 @@ class Ui(QtWidgets.QMainWindow):
 
         self.deleteButton = QtWidgets.QPushButton(widget)
         self.deleteButton.setText("Usuń stare pliki")
-        self.deleteButton.clicked.connect(self.confirm_remove_files)
+        self.deleteButton.clicked.connect(self.confirm_remove_workbench)
         self.deleteButton.setFixedSize(button_size, button_size)
         gridLayout.addWidget(self.deleteButton, 1, 1)
 
@@ -65,36 +67,55 @@ class Ui(QtWidgets.QMainWindow):
         gridLayout.addWidget(self.testButton, 1, 2)
 
     def get_BDFfile(self):   
-        try:       
-            self.BDF_filename, _ = QFileDialog.getOpenFileName(self, 'Choose BDF file', r"C:\Users\koste\OneDrive\Pulpit\ESATAN_PARSER", "BDF files (*.bdf)")
+        try:
+            self.BDF_filename, _ = QFileDialog.getOpenFileName(self, 'Choose BDF file', self.my_folder, "BDF files (*.bdf)")
+            result = re.findall(r'[^//]+', self.BDF_filename)
+            self.BDFButton.setText(f"Wybrano \n {result[-1]}")
+
+            # Sprawdź, czy nazwy plików BDF i Excel są takie same przed aktywowaniem create_parser
+            if self.are_files_selected():
+                if self.check_filenames():
+                    self.create_parser()
+                else:
+                    QMessageBox.warning(self,'Ostrzeżenie','Nazwy plików BDF i Excel są różne. Wybierz pliki o takich samych nazwach.',QMessageBox.Ok)
         except:
             pass
-        result = re.findall(r'[^//]+',self.BDF_filename)
-        self.BDFButton.setText(f"Wybrano \n {result[-1]}")
-
-        if self.are_files_selected():
-            self.create_parser()
 
     def get_XLSXfile(self):   
-        try:       
-            self.excel_filename, _ = QFileDialog.getOpenFileName(self, 'Choose Excel file', r"C:\Users\koste\OneDrive\Pulpit\ESATAN_PARSER", "Excel files (*.xlsx)")
+        try:
+            self.excel_filename, _ = QFileDialog.getOpenFileName(self, 'Choose Excel file', self.my_folder, "Excel files (*.xlsx)")
+            result = re.findall(r'[^//]+', self.excel_filename)
+            self.ExcelButton.setText(f"Wybrano \n {result[-1]}")
+
+            # Sprawdź, czy nazwy plików BDF i Excel są takie same przed aktywowaniem create_parser
+            if self.are_files_selected():
+                print("Test czy wybrano pliki")
+                if self.check_filenames():
+                    print("Test czy nazwa sie zgadza")
+                    self.create_parser()
+                else:
+                    QMessageBox.warning(self,'Ostrzeżenie','Nazwy plików BDF i Excel są różne. Wybierz pliki o takich samych nazwach.',QMessageBox.Ok)
         except:
             pass
-        result = re.findall(r'[^//]+',self.excel_filename)
-        self.ExcelButton.setText(f"Wybrano \n {result[-1]}")
 
-        if self.are_files_selected():
-            self.create_parser()
+    def check_filenames(self):
+        # Sprawdź, czy nazwy plików BDF i Excel są takie same
+        if self.BDF_filename and self.excel_filename:
+            bdf_name = os.path.splitext(self.BDF_filename)[0]
+            excel_name = os.path.splitext(self.excel_filename)[0]
+            print(bdf_name,excel_name)
+            return bdf_name == excel_name
+        return False
 
+    def are_files_selected(self):
+        return self.BDF_filename is not None and self.excel_filename is not None
+
+    
     def create_parser(self):
-        time.sleep(5)
         self.EsatanParser = Parser(self.BDF_filename, self.excel_filename)
         self.BDF_filename = None
         self.excel_filename = None
 
-    def are_files_selected(self):
-        return self.BDF_filename is not None and self.excel_filename is not None
-    
     def copy_files(self):
         pass
 
@@ -106,36 +127,59 @@ class Ui(QtWidgets.QMainWindow):
         if self.esatan_folder:
             nazwa_folderu = re.findall(r'[^//]+',self.esatan_folder)
             self.EsatanButton.setText(f'Wybrany folder:\n{nazwa_folderu[-1]}')
-    
-    def confirm_remove_files(self):
-        if hasattr(self, 'esatan_folder'):
-            result = QMessageBox.question(
-                self,
-                'Potwierdzenie',
-                'Czy na pewno chcesz usunąć pliki z 00_WORKBENCH?',
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
-            )
-            if result == QMessageBox.Yes:
-                self.remove_files()
 
-    def remove_files(self):
+    def confirm_remove_workbench(self):
         if hasattr(self, 'esatan_folder'):
-            workbench_folder = os.path.join(self.esatan_folder, '00_WORKBENCH')
-            if os.path.exists(workbench_folder):
-                self.delete_files_in_folder(workbench_folder)
-                self.deleteButton.setText('Usunięto pliki z\n"00_WORKBENCH"')
-            else:
-                self.deleteButton.setText('Folder "00_WORKBENCH"\nnie istnieje')
+            try:
+                workbench_folder = os.path.join(self.esatan_folder, '00_WORKBENCH')
+                gmm_folder = os.path.join(self.esatan_folder, '01_GMM')
 
-    def delete_files_in_folder(self, folder):
+                if os.path.exists(workbench_folder):
+                    result = QMessageBox.question(
+                        self,
+                        'Potwierdzenie',
+                        'Czy na pewno chcesz usunąć wszystko z folderu Workbench?',
+                        QMessageBox.Yes | QMessageBox.No,
+                        QMessageBox.No
+                    )
+                    if result == QMessageBox.Yes:
+                        self.deleteButton.setText('Usunięto pliki')
+                        self.delete_workbench_contents(workbench_folder)
+                        self.delete_out_files_in_01_GMM(gmm_folder)
+            except OSError as e:
+                if e.errno == 32:
+                    print("Plik jest obecnie używany. Proszę zamknąć wszystkie foldery  pliki.")
+
+    def delete_workbench_contents(self, folder):
         for root, dirs, files in os.walk(folder):
             for file in files:
-                file_path = os.path.join(root, file) 
+                file_path = os.path.join(root, file)
                 try:
                     os.remove(file_path)
-                except Exception as e:
-                    print(f"Nie udało się usunąć pliku {file_path}: {e}")
+                except OSError as e:
+                    if e.errno == 32:
+                        print("Plik jest obecnie używany. Proszę zamknąć wszystkie foldery  pliki.")
+
+            for dir in dirs:
+                dir_path = os.path.join(root, dir)
+                try:
+                    os.rmdir(dir_path)
+                except OSError as e:
+                    if e.errno == 32:
+                        print("Plik jest obecnie używany. Proszę zamknąć wszystkie foldery  pliki.")
+
+    def delete_out_files_in_01_GMM(self,folder):
+        if hasattr(self, 'esatan_folder'):
+            if os.path.exists(folder):
+                for root, dirs, files in os.walk(folder):
+                    for file in files:
+                        if file.endswith(".out"):
+                            file_path = os.path.join(root, file)
+                            try:
+                                os.remove(file_path)
+                            except OSError as e:
+                                if e.errno == 32:
+                                    print("Plik jest obecnie używany. Proszę zamknąć wszystkie foldery  pliki.")
 
 
 if __name__ == '__main__':

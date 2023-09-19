@@ -1,4 +1,4 @@
-BEGIN_MODEL FGS_TA_Rv04
+BEGIN_MODEL \Users\koste\OneDrive\Pulpit\ESATAN_PARSER\2_FGS_TA_Rv04\2_FGS_TA_Rv04
 
 /*KONSTANTY KLOSIEWICZ*/
 
@@ -2783,7 +2783,7 @@ TA_M2 = TA_M2_SURFACE + TA_M2_WALLS;
 /*               ASSEMBLY               */
 /*--------------------------------------*/
 
-FGS_TA_Rv04 = TA_Frame + TA_M1 + TA_M2 + TA_Field_Stop;
+\Users\koste\OneDrive\Pulpit\ESATAN_PARSER\2_FGS_TA_Rv04\2_FGS_TA_Rv04 = TA_Frame + TA_M1 + TA_M2 + TA_Field_Stop;
 
 /****************************************/
 
