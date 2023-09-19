@@ -92,6 +92,7 @@ class Primitive:
             return "DUPA"
 
 class Parser:
+
     def __init__(self,bdffile,excelfile):
         print("\n#############################################\n")
         
@@ -109,7 +110,6 @@ class Parser:
         self.transform_to_primitives()
         self.get_file_name()
         self.nowy_plikERG()
-
         print("\n#############################################\n")
 
     def get_file_name(self):
@@ -118,6 +118,7 @@ class Parser:
             self.filename = self.filename.split(".")[-2]
             self.modelname = self.filename[2:]
             print(f"\tNazwa pliku: {self.filename}\n")
+            return self.filename
 
         elif "\\" in self.bdffile:
             self.filename = self.bdffile.split("\\")[-1]
@@ -132,7 +133,7 @@ class Parser:
         self.primitives = self.primitives.iloc[:,list(range(8)) + [9]]
         new_column_names = ["Primitives","node number","Config","Cutting","nodes 1","nodes 2","ratio1","ratio2","CAUTION"]
         self.primitives.columns = new_column_names
-        
+
         if not (self.primitives.loc[:,["Primitives","node number"]].isna().all().all() or (self.primitives.loc[:,["Primitives","node number"]] == 0).all().all()):
             self.primitives['node number'] = self.primitives['node number'].apply(lambda x: str(x) if pd.notna(x) else x)
             # Usunięcie zer i kropek
@@ -140,14 +141,12 @@ class Parser:
             # Zamiana z powrotem na typ int (opcjonalnie)
             self.primitives['node number'] = self.primitives['node number'].apply(lambda x: int(x) if pd.notna(x) else x)
         
-        
         self.cuts = pd.read_excel(self.excelfile,sheet_name="CUTS",na_filter = Filter)
         self.cuts = self.cuts.loc[:,["CUT Name","SHELL 1","SHELL 2"]]
 
         self.hierarchy = pd.read_excel(self.excelfile,sheet_name="HIERARCHY",na_filter = Filter)
         self.pid_index = self.hierarchy.columns.get_loc("PID")
-        self.hier_pierwsze = self.hierarchy.iloc[:,0:self.pid_index] 
-        #Jeśli nazwa modelu jest źle to tutaj                   
+        self.hier_pierwsze = self.hierarchy.iloc[:,0:self.pid_index]
         self.hierarchy = self.hierarchy.loc[:,["nodenumbers of side 1","End Ids","offset","act1","act2","coat1","coat2","bulk1","bulk2","thick1","thick2","unity1","unity2","throughCond","conductance","emittance","mass1","mass2","crit1","crit2","color1","color2"]]
 
         new_column_names = [f'Col{i+1}' for i in range(len(self.hier_pierwsze.columns))] 
@@ -166,30 +165,30 @@ class Parser:
 
     def load_bdf_data(self):
                 #   -.123          -3.123-3 tu dwie cyfry w inżynieru       ''0.''         -5.-3
-        regex = r'([+-]?\.\d+)|(([+-]?\d\.\d+)-(\d{1,2}))|(\s0\.\s)|(([+-]?\d\.)-(\d{1,2}))'
-        
+        regex = r'([+-]?\.\d+)|(([+-]?\d\.\d+)-(\d))|(\s0\.\s)|(([+-]?\d\.)-(\d))'
+
         with open(self.bdffile, 'r') as plik:
             linie = plik.readlines()
+            i = 25
             for linia in linie:
                 if linia.startswith('GRID'):
                     floats = []
                     id_num = re.findall(r'\b\d+\b', linia)[0]    
                     found = re.findall(regex, linia)
-                    
                     for Duple in found:
                         for num in Duple:
                             if num == '':
                                 continue
-                            #           ''0.''         -.123
                             elif re.match(r'(\s0\.\s)|([+-]?\.\d+)',num):
+                                #           ''0.''         -.123
                                 floats.append(num)
 
-                            #               -3.123-3
-                            elif re.match(r'([+-]?\d\.\d+)-(\d{1,2})', num): 
+                            elif re.match(r'([+-]?\d\.\d+)-(\d)', num): 
+                                #               -3.123-3
                                 floats.append(self.convert_engi(Duple[2],Duple[3]))
-
-                            #                   -5.-3
-                            elif re.match(r'([+-]?\d\.)-(\d{1,2})', num):
+                            
+                            elif re.match(r'([+-]?\d\.)-(\d)', num):
+                                 #          -5.-3
                                 floats.append(self.convert_engi(Duple[6],Duple[7]))
 
                     floats = [format(float(i),'.8f') for i in floats]
@@ -215,7 +214,7 @@ class Parser:
             return wynik
     
     def transform_to_primitives(self):
-        print("\tSzukanie prymitywów\n")
+        print("\tSzukanie prymitywów")
         for index, item in enumerate(self.all_geometry):
             Id = item.get_id()
             wiersz_prim = self.primitives[self.primitives.apply(self.check_id_prim, args=(Id,),axis=1)]
@@ -350,7 +349,7 @@ class Parser:
 
         # if wiersz_prim["Config"].values[0] == "O":
         #     self.file.write(f'')
-        # elif wiersz_prim["Config"].values[0] == "S":     #NA RAZIE TO JEST ARTEFAKT
+        # elif wiersz_prim["Config"].values[0] == "S":          #NA RAZIE TO JEST ARTEFAKT
         #     self.file.write(f'')
         # elif wiersz_prim["Config"].values[0] == "C":
         #     self.file.write(f'')
@@ -434,52 +433,32 @@ class Parser:
                 key = col1 if pd.notna(col1) else (col2 if pd.notna(col2) else (col3 if pd.notna(col3) else col4))
                 dictionary[key] = (nodeNum,endNodeNum)
 
-                                                        #Pusty dictionary na materiały
         for k,v in dictionary.items():
             materiały = {k:[] for k,v in dictionary.items()}
 
-        for item in self.all_geometry:                #Tutaj sprawdzam czy prymityw geometryczny jest 
-            for key,ids in dictionary.items():          #w przedziale id-endid. Jeśli tak to dodaję do materiału
+        for item in self.all_geometry:                
+            for key,ids in dictionary.items():        
                 if ids[0] <= item.get_id() <= ids[1]:
                     materiały[key].append(str(item))
                 else:
                     continue
         return materiały
     
-    def match_cuts_to_primitives(self):
-        shellOneAndTwo = {}
-
-        for _ ,row in self.cuts.iterrows():
+    def add_cuts(self):
+        for item in self.any_primitive:
+            print(item.get_id())
+        for index,row in self.cuts.iterrows():
             if not row.isnull().all():
-                key = str(row[0])
-                shellOneAndTwo[key] = [[],[]]
                 print(row[0],row[1],row[2])
                 shell1 = re.findall(r'\b\d+\b',row[1])
-                for shellid in shell1:
-                    for primObj in self.any_primitive:
-                        if primObj.get_id() == int(shellid):
-                            shellOneAndTwo[key][0].append(primObj)
-
                 shell2 = re.findall(r'\b\d+\b',row[2])
-                for shellid in shell2:
-                    for primObj in self.any_primitive:
-                        if primObj.get_id() == int(shellid):
-                            shellOneAndTwo[key][1].append(primObj)
-                
-        return shellOneAndTwo
+                print(shell1,shell2)
 
-    def add_cuts(self):
-        #Wykorzystane geometrie tylko raz nie mogą zostać użyte ponownie
-        #To na później
-        shellOneAndTwo = self.match_cuts_to_primitives()
-        #shellOneAndTwo = { cutName:  [[shell1][shell2]],
-        #                   cutName2: [[shell1][shell2]] }
-        for key,val in shellOneAndTwo.items():                  
-            shell1 = [str(text) for text in val[0]]
-            shell2 = [str(text) for text in val[1]]
-            shell1 = ' + '.join(shell1)
-            shell2 = ' - '.join(shell2)  
-            self.file.write(f"\nGEOMETRY cut_{key};\ncut_{key} = {shell1} - {shell2};\n")   
+        else:
+            return
+
+    def fig_in_cuts(self,id_fig,id_in_cuts):
+        return  id_fig == id_in_cuts
 
     def add_groups(self):
         materiały = self.make_material_dict()
@@ -547,7 +526,6 @@ class Parser:
             self.file.write("\n/*KONSTANTY KLOSIEWICZ*/\n")
 
         if tekst == "POINTS":
-            #TEKST
             self.file.write("\n/*--------------------------------------*/\n/*                 POINTS               */\n/*--------------------------------------*/\n")
 
         elif tekst == "OPTICAL":
@@ -578,8 +556,8 @@ class Parser:
 
 
 if __name__ == '__main__':
-
-    excel_path = r"C:\Users\koste\OneDrive\Pulpit\ESATAN_PARSER\2_FGS_TA_Rv04\2_FGS_TA_Rv04.xlsx"
-    bdf_path = r"C:\Users\koste\OneDrive\Pulpit\ESATAN_PARSER\2_FGS_TA_Rv04\2_FGS_TA_Rv04.bdf"
+    
+    excel_path = r"C:/Users/koste/OneDrive/Pulpit/ESATAN_PARSER/2_FGS_TA_Rv04/2_FGS_TA_Rv04.xlsx"
+    bdf_path = r"C:/Users/koste/OneDrive/Pulpit/ESATAN_PARSER/2_FGS_TA_Rv04/2_FGS_TA_Rv04.bdf"
 
     parser = Parser(bdf_path,excel_path)
