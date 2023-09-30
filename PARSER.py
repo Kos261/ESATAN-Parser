@@ -487,6 +487,10 @@ class Parser:
                     self.file.write(f"\nGEOMETRY {parent};\n{parent} = {lista};\n")
 
             for parent in self.result2:
+
+                print(parent)
+                print(self.result2[parent])
+
                 if not self.result2[parent]:
                     continue
                 else:
@@ -557,7 +561,7 @@ class Parser:
 
 if __name__ == '__main__':
     
-    excel_path = r"C:/Users/koste/OneDrive/Pulpit/ESATAN_PARSER/2_FGS_TA_Rv04/2_FGS_TA_Rv04.xlsx"
-    bdf_path = r"C:/Users/koste/OneDrive/Pulpit/ESATAN_PARSER/2_FGS_TA_Rv04/2_FGS_TA_Rv04.bdf"
+    excel_path = r"C:/Users/koste/OneDrive/Pulpit/ESATAN_PARSER/2_FCU_PSU_v03/2_FCU_PSU_v03.xlsx"
+    bdf_path = r"C:/Users/koste/OneDrive/Pulpit/ESATAN_PARSER/2_FCU_PSU_v03/2_FCU_PSU_v03.bdf"
 
     parser = Parser(bdf_path,excel_path)
