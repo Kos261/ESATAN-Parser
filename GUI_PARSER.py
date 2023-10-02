@@ -108,6 +108,7 @@ class Ui(QtWidgets.QMainWindow):
         self.testButton.clicked.connect(self.test_ERG)
         self.testButton.setFixedSize(self.button_size, self.button_size)
         self.ButtonContainer.addWidget(self.testButton, 1, 2)
+        
 
         self.clear_button = QPushButton("Clear\nconsole")
         self.clear_button.clicked.connect(self.clear_console)
@@ -170,8 +171,8 @@ class Ui(QtWidgets.QMainWindow):
         return self.BDF_filename is not None and self.excel_filename is not None
  
     def create_parser(self):
-        
         self.append_text('Rozpoczynam konwersję')
+        QCoreApplication.processEvents()
         self.EsatanParser = Parser(self.BDF_filename, self.excel_filename)
         self.append_text(f'Pomyślnie stworzono plik "{self.EsatanParser.get_file_name()}.erg"')
         self.znajdz_ostatni_erg(self.my_folder)
@@ -298,20 +299,21 @@ class Ui(QtWidgets.QMainWindow):
     
     def test_ERG(self):
         if not self.last_erg_file:
-                self.znajdz_ostatni_erg(self.my_folder)
-                self.append_text(f"\nOstatni plik .erg {self.last_erg_file}\n")
+            #Nie ma nowego pliku - biorę ostatni
+            self.znajdz_ostatni_erg(self.my_folder)
+            self.append_text(f"\nOstatni plik .erg {self.last_erg_file}\n")
 
         if self.gmm_folder and self.last_erg_file:
-            self.append_text(f"\n\n***DEBUGOWANIE**\n Stworzono plik i znaleziono folder GMM")
+            #Wybrano folder z modelami i utworzono ostatnio plik
             self.przenies_ostatni_erg()
-            self.append_text(f"\nOstatni plik .erg {self.last_erg_file}\n")
-            self.create_batch_file()
+            #self.create_batch_file()
         else:
-            self.append_text(f"\n{self.gmm_folder}\n{self.last_erg_file}\n")
+            #Nie wybrano folderu z modelammi lub nie ma ostatnio żadnego pliku
+            self.append_text(f"\nFolder GMM:{self.gmm_folder}\nOstatni plik: {self.last_erg_file}\n")
             self.append_text("\nNie utworzono pliku albo nie znaleziono folderu z modelami\n")
 
     def znajdz_ostatni_erg(self, folder_programu):
-            self.append_text("\nDziała szukanie pliku")
+            self.append_text("\nSzukam ostatniego pliku .erg\n")
             lista_plikow = [f for f in os.listdir(folder_programu) if f.endswith(".erg")]
             if lista_plikow:
                 self.last_erg_file = max(lista_plikow, key=lambda x: os.path.getctime(os.path.join(folder_programu, x)))
@@ -320,34 +322,39 @@ class Ui(QtWidgets.QMainWindow):
 
     def przenies_ostatni_erg(self):
         if self.last_erg_file_path:
-            if os.path.exists(self.last_erg_file):
-                self.append_text("Usunięto stary plik")
-                os.remove(self.submodels_folder + '\\' + self.last_erg_file)
-
-            shutil.move(self.last_erg_file_path,self.submodels_folder)
-            self.append_text(f"\nPlik {self.last_erg_file} przeniesiony do: {self.submodels_folder}\n")
+            if os.path.exists(self.submodels_folder+'\\'+self.last_erg_file):
+                self.append_text(self.submodels_folder+'\\'+self.last_erg_file)
+                result = QMessageBox.question(self,'Potwierdzenie','Czy na pewno chcesz zastąpić stary model nowym?',QMessageBox.Yes | QMessageBox.No,QMessageBox.No)
+                if result == QMessageBox.Yes:
+                    os.remove(self.submodels_folder + '\\' + self.last_erg_file)
+                    shutil.move(self.last_erg_file_path,self.submodels_folder)
+            else:
+                self.append_text("Nie ma starego pliku")
+                shutil.move(self.last_erg_file_path,self.submodels_folder)
+                self.append_text(f"\nPlik {self.last_erg_file} przeniesiony do: {self.submodels_folder}\n")
+                self.testButton.setEnabled(False)
         else:
             self.append_text("Nie znaleziono plików .erg do przeniesienia.")
             
     def create_batch_file(self):
 
         batch_content = f'''
-    set\tPFAD_GMM={self.gmm_folder}\\
+set\tPFAD_GMM={self.gmm_folder}\\
 
-    rem call submodels
-    call {self.esrdg_path} < %PFAD_GMM% 02_SUBMODELS\{self.last_erg_file} > %PFAD% {self.last_erg_file.split('.')[0]+'.out'}
-    rem assemble model from module *.erg files
-    call {self.esrdg_path} < %PFAD_GMM%Test_subj_1.erg > %PFAD%99_Test_all.out
+rem call submodels
+call {self.esrdg_path} < %PFAD_GMM%02_SUBMODELS\{self.last_erg_file} >      %PFAD% {self.last_erg_file.split('.')[0]+'.out'}
+rem assemble model from module *.erg files
+call {self.esrdg_path} < %PFAD_GMM%Test_subj_1.erg >       %PFAD%99_Test_all.out
 
-    pause
-        '''
+pause
+'''
         # Nazwa pliku batch
         batch_file_name = os.path.join(self.gmm_folder, 'Test_subj_1.bat')
 
         with open(batch_file_name, "w") as batch_file:
             batch_file.write(batch_content)
 
-        self.append_text(f"Utworzono plik batch: {batch_file_name}")
+        self.append_text(f"\n***Utworzono plik batch: {batch_file_name}***\n")
 
 
 if __name__ == '__main__':
