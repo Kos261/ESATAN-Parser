@@ -89,7 +89,7 @@ class Primitive:
         if self.node_num == 4:
             return self.p1, self.p2, self.p3, self.p4
         else:
-            return "DUPA"
+            return "Wrong number of vertices"
 
 class Parser:
 
@@ -117,14 +117,14 @@ class Parser:
             self.filename = self.bdffile.split(r'/')[-1]
             self.filename = self.filename.split(".")[-2]
             self.modelname = self.filename[2:]
-            print(f"\tNazwa pliku: {self.filename}\n")
+            print(f"\tFile name: {self.filename}\n")
             return self.filename
 
         elif "\\" in self.bdffile:
             self.filename = self.bdffile.split("\\")[-1]
             self.filename = self.filename.split(".")[-2]
             self.modelname = self.filename[2:]
-            print(f"\tNazwa pliku: {self.filename}\n")
+            print(f"\tFilename: {self.filename}\n")
 
     def load_excel_data(self):
         Filter = True #Nan filter
@@ -136,9 +136,9 @@ class Parser:
 
         if not (self.primitives.loc[:,["Primitives","node number"]].isna().all().all() or (self.primitives.loc[:,["Primitives","node number"]] == 0).all().all()):
             self.primitives['node number'] = self.primitives['node number'].apply(lambda x: str(x) if pd.notna(x) else x)
-            # Usunięcie zer i kropek
+            # Deleting semicolons and dots
             self.primitives['node number'] = self.primitives['node number'].str.replace(r'\.0', '', regex=True)
-            # Zamiana z powrotem na typ int (opcjonalnie)
+            # Adding them back (optional)
             self.primitives['node number'] = self.primitives['node number'].apply(lambda x: int(x) if pd.notna(x) else x)
         
         self.cuts = pd.read_excel(self.excelfile,sheet_name="CUTS",na_filter = Filter)
@@ -146,12 +146,12 @@ class Parser:
 
         self.hierarchy = pd.read_excel(self.excelfile,sheet_name="HIERARCHY",na_filter = Filter)
         self.pid_index = self.hierarchy.columns.get_loc("PID")
-        self.hier_pierwsze = self.hierarchy.iloc[:,0:self.pid_index]
+        self.hier_first_cols = self.hierarchy.iloc[:,0:self.pid_index]
         self.hierarchy = self.hierarchy.loc[:,["nodenumbers of side 1","End Ids","offset","act1","act2","coat1","coat2","bulk1","bulk2","thick1","thick2","unity1","unity2","throughCond","conductance","emittance","mass1","mass2","crit1","crit2","color1","color2"]]
 
-        new_column_names = [f'Col{i+1}' for i in range(len(self.hier_pierwsze.columns))] 
-        self.hier_pierwsze.columns = new_column_names                                   
-        self.hierarchy = pd.concat([self.hier_pierwsze,self.hierarchy], axis = 1)       
+        new_column_names = [f'Col{i+1}' for i in range(len(self.hier_first_cols.columns))] 
+        self.hier_first_cols.columns = new_column_names                                   
+        self.hierarchy = pd.concat([self.hier_first_cols,self.hierarchy], axis = 1)       
                                                                             
         self.bulk = pd.read_excel(self.excelfile,sheet_name="BULK",na_filter = Filter)
         self.bulk = self.bulk.loc[:,["Bulk Name","Density [Kg/m3]","Specific heat [J/KgK]","Thermal conductivity [w/mK]"]]
@@ -164,7 +164,7 @@ class Parser:
         print("\n\tExcel data loaded succesfully")
 
     def load_bdf_data(self):
-                #   -.123          -3.123-3 tu dwie cyfry w inżynieru       ''0.''         -5.-3
+                #   -.123          -3.123-3 engineer       ''0.''         -5.-3
         regex = r'([+-]?\.\d+)|(([+-]?\d\.\d+)-(\d))|(\s0\.\s)|(([+-]?\d\.)-(\d))'
 
         with open(self.bdffile, 'r') as plik:
@@ -210,16 +210,16 @@ class Parser:
         return
     
     def convert_engi(self,base_number,exp):
-            wynik = (float(base_number)) * 10 ** (-int(exp))
-            return wynik
+            result = (float(base_number)) * 10 ** (-int(exp))
+            return result
     
     def transform_to_primitives(self):
-        print("\tSzukanie prymitywów")
+        print("\tLooking for primitives...")
         for index, item in enumerate(self.all_geometry):
             Id = item.get_id()
-            wiersz_prim = self.primitives[self.primitives.apply(self.check_id_prim, args=(Id,),axis=1)]
-            if not wiersz_prim.empty:
-                primitive_name = wiersz_prim["Primitives"].values[0]
+            row_primitive = self.primitives[self.primitives.apply(self.check_id_prim, args=(Id,),axis=1)]
+            if not row_primitive.empty:
+                primitive_name = row_primitive["Primitives"].values[0]
                 if isinstance(item,Triangle):
                     p1,p2,p3 = item.get_points()
                     primitive = Primitive(primitive_name,Id,p1,p2,p3)
@@ -273,33 +273,33 @@ class Parser:
         for figure in self.all_geometry:
             
             Id = figure.get_id()
-            wiersz_hier = self.hierarchy[self.hierarchy.apply(self.check_id_hier, args=(Id,), axis=1)]
+            row_hierarchy = self.hierarchy[self.hierarchy.apply(self.check_id_hier, args=(Id,), axis=1)]
             
             if isinstance(figure,Triangle):
                 p1,p2,p3 = figure.get_points()
                 self.file.write(f"\n\nGEOMETRY {figure};\n{figure} = SHELL_TRIANGLE(\npoint1 = point_{p1},\npoint2 = point_{p2},\npoint3 = point_{p3},\n")
-                self.add_one_figure_hier(Id,wiersz_hier)
+                self.add_one_figure_hier(Id,row_hierarchy)
 
             elif isinstance(figure,Rectangle):
                 p1,p2,p3,p4 = figure.get_points() 
                 self.file.write(f"\n\nGEOMETRY {figure};\n{figure} = SHELL_QUADRILATERAL(\npoint1 = point_{p1},\npoint2 = point_{p2},\npoint3 = point_{p3},\npoint4 = point_{p4},\n")
-                self.add_one_figure_hier(Id,wiersz_hier)
+                self.add_one_figure_hier(Id,row_hierarchy)
 
             elif isinstance(figure,Primitive):
-                wiersz_prim = self.primitives[self.primitives.apply(self.check_id_prim, args=(Id,),axis=1)]
+                row_primitive = self.primitives[self.primitives.apply(self.check_id_prim, args=(Id,),axis=1)]
             
                 if figure.node_num == 3:
                     p1,p2,p3 = figure.get_points()
                     self.file.write(f"\n\nGEOMETRY {figure};\n{figure} = {figure.BIG()}(\npoint1 = point_{p1},\npoint2 = point_{p2},\npoint3 = point_{p3},\n")
-                    self.add_one_figure_prim(Id,wiersz_prim,wiersz_hier)
+                    self.add_one_figure_prim(Id,row_primitive,row_hierarchy)
                     
                 if figure.node_num == 4:
                     p1,p2,p3,p4 = figure.get_points()
                     self.file.write(f"\n\nGEOMETRY {figure};\n{figure} = {figure.BIG()}(\npoint1 = point_{p1},\npoint2 = point_{p2},\npoint3 = point_{p3},\npoint4 = point_{p4},\n")
-                    self.add_one_figure_prim(Id,wiersz_prim,wiersz_hier)
+                    self.add_one_figure_prim(Id,row_primitive,row_hierarchy)
 
             else:
-                print("Figura źle zdefiniowana")
+                print("Wrong definition of primitive")
 
     def check_id_hier(self,row,moje_id):
         if pd.notnull(row['nodenumbers of side 1']) and pd.notnull(row['End Ids']):
@@ -313,108 +313,99 @@ class Parser:
         else:
             return False
 
-    def add_one_figure_hier(self,moj_id,wiersz_hier):
+    def add_one_figure_hier(self,moj_id,row_hierarchy):
         self.file.write(f'sense = 1,\nmeshType1 = "regular",\nnodes1 = 1,\nratio1 = 1.00000000,\nmeshType2 = "regular",\nnodes2 = 1,\nratio2 = 1.00000000,\nanalysis_type = "Lumped Parameter",\nlabel1 = "",\n')
-        side1 = wiersz_hier["act1"].to_string(index=False)
+        side1 = row_hierarchy["act1"].to_string(index=False)
         self.file.write(f'side1 = "{side1[0].upper()+side1[1:].lower()}",\n')
-        self.file.write(f'criticality1 = "{wiersz_hier["crit1"].to_string(index=False)}",\n')
+        self.file.write(f'criticality1 = "{row_hierarchy["crit1"].to_string(index=False)}",\n')
         self.file.write(f'nbase1 = {moj_id},\n')
         self.file.write('ndelta1 = 0,\n')
-        self.file.write(f'opt1 = {wiersz_hier["coat1"].to_string(index=False)},\n')
-        self.file.write(f'colour1 = "{wiersz_hier["color1"].to_string(index=False)}",\n')
+        self.file.write(f'opt1 = {row_hierarchy["coat1"].to_string(index=False)},\n')
+        self.file.write(f'colour1 = "{row_hierarchy["color1"].to_string(index=False)}",\n')
 
         self.file.write('label2 = "",\n')
-        side2 = wiersz_hier["act2"].to_string(index=False)
+        side2 = row_hierarchy["act2"].to_string(index=False)
         self.file.write(f'side2 = "{side2[0].upper()+side2[1:].lower()}",\n')
-        self.file.write(f'criticality2 = "{wiersz_hier["crit2"].to_string(index=False)}",\n')
+        self.file.write(f'criticality2 = "{row_hierarchy["crit2"].to_string(index=False)}",\n')
         self.file.write(f'nbase2 = {moj_id},\n')
         self.file.write('ndelta2 = 0,\n')
-        self.file.write(f'opt2 = {wiersz_hier["coat2"].to_string(index=False)},\n')
-        self.file.write(f'colour2 = "{wiersz_hier["color2"].to_string(index=False)}",\n')
+        self.file.write(f'opt2 = {row_hierarchy["coat2"].to_string(index=False)},\n')
+        self.file.write(f'colour2 = "{row_hierarchy["color2"].to_string(index=False)}",\n')
         self.file.write(f'composition = "SINGLE",\n')
-        self.file.write(f'bulk = {wiersz_hier["bulk1"].to_string(index=False)},\n')
-        liczba = format(float(wiersz_hier["thick1"].to_string(index=False)) ,'.8f')
+        self.file.write(f'bulk = {row_hierarchy["bulk1"].to_string(index=False)},\n')
+        liczba = format(float(row_hierarchy["thick1"].to_string(index=False)) ,'.8f')
         self.file.write(f'thick = {liczba},\n')
 
         self.file.write('bulk1 = [-10000.00000000, -10000.00000000, -10000.00000000],\nthick1 = 0.00000000,\nbulk2 = [-10000.00000000, -10000.00000000, -10000.00000000],\nthick2 = 0.00000000,\n')
-        self.file.write(f'through_cond = "{wiersz_hier["throughCond"].to_string(index=False)}",\n')
+        self.file.write(f'through_cond = "{row_hierarchy["throughCond"].to_string(index=False)}",\n')
         self.file.write('conductance = 0.00000000,\nemittance = 0.00000000);')
         
-    def add_one_figure_prim(self,moj_id,wiersz_prim,wiersz_hier):
+    def add_one_figure_prim(self,moj_id,row_primitive,row_hierarchy):
         
-        if wiersz_prim["Cutting"].values[0] == "OUTSIDE":
+        if row_primitive["Cutting"].values[0] == "OUTSIDE":
             self.file.write(f'sense = 1,\n')
-        elif wiersz_prim["Cutting"].values[0] == "INSIDE":
+        elif row_primitive["Cutting"].values[0] == "INSIDE":
             self.file.write(f'sense = -1,\n')
 
-        # if wiersz_prim["Config"].values[0] == "O":
-        #     self.file.write(f'')
-        # elif wiersz_prim["Config"].values[0] == "S":          #NA RAZIE TO JEST ARTEFAKT
-        #     self.file.write(f'')
-        # elif wiersz_prim["Config"].values[0] == "C":
-        #     self.file.write(f'')
-        # elif wiersz_prim["Config"].values[0] == "CS":
-        #     self.file.write(f'')                          
-                            
         self.file.write('meshType1 = "regular",\n')
-        nodes1 = int(wiersz_prim['nodes 1'].values[0])
+        nodes1 = int(row_primitive['nodes 1'].values[0])
         self.file.write(f"nodes1 = {nodes1},\n")
         self.file.write('meshType2 = "regular",\n')
-        ratio1 = format(wiersz_prim['ratio1'].values[0],'8f')
+        ratio1 = format(row_primitive['ratio1'].values[0],'8f')
         self.file.write(f"ratio1 = {ratio1},\n")
-        nodes2 = int(wiersz_prim['nodes 2'].values[0])
+        nodes2 = int(row_primitive['nodes 2'].values[0])
         self.file.write(f"nodes2 = {nodes2},\n")
-        ratio2 = format(wiersz_prim['ratio2'].values[0],'8f')
+        ratio2 = format(row_primitive['ratio2'].values[0],'8f')
         self.file.write(f"ratio2 = {ratio2},\n")
 
         self.file.write('analysis_type = "Lumped Parameter",\nlabel1 = "",\n')
-        side1 = wiersz_hier["act1"].to_string(index=False)
+        side1 = row_hierarchy["act1"].to_string(index=False)
         self.file.write(f'side1 = "{side1[0].upper()+side1[1:].lower()}",\n')
-        self.file.write(f'criticality1 = "{wiersz_hier["crit1"].to_string(index=False)}",\n')
+        self.file.write(f'criticality1 = "{row_hierarchy["crit1"].to_string(index=False)}",\n')
         self.file.write(f'nbase1 = {moj_id},\n')
         self.file.write('ndelta1 = 0,\n')
-        self.file.write(f'opt1 = {wiersz_hier["coat1"].to_string(index=False)},\n')
-        self.file.write(f'colour1 = "{wiersz_hier["color1"].to_string(index=False)}",\n')
+        self.file.write(f'opt1 = {row_hierarchy["coat1"].to_string(index=False)},\n')
+        self.file.write(f'colour1 = "{row_hierarchy["color1"].to_string(index=False)}",\n')
         self.file.write('label2 = "",\n')
-        side2 = wiersz_hier["act2"].to_string(index=False)
+        side2 = row_hierarchy["act2"].to_string(index=False)
         self.file.write(f'side2 = "{side2[0].upper()+side2[1:].lower()}",\n')
-        self.file.write(f'criticality2 = "{wiersz_hier["crit2"].to_string(index=False)}",\n')
+        self.file.write(f'criticality2 = "{row_hierarchy["crit2"].to_string(index=False)}",\n')
         self.file.write(f'nbase2 = {moj_id},\n')
         self.file.write('ndelta2 = 0,\n')
-        self.file.write(f'opt2 = {wiersz_hier["coat2"].to_string(index=False)},\n')
-        self.file.write(f'colour2 = "{wiersz_hier["color2"].to_string(index=False)}",\n')
+        self.file.write(f'opt2 = {row_hierarchy["coat2"].to_string(index=False)},\n')
+        self.file.write(f'colour2 = "{row_hierarchy["color2"].to_string(index=False)}",\n')
         self.file.write(f'composition = "SINGLE",\n')
-        self.file.write(f'bulk = {wiersz_hier["bulk1"].to_string(index=False)},\n')
-        liczba = format(float(wiersz_hier["thick1"].to_string(index=False)) ,'.8f')
+        self.file.write(f'bulk = {row_hierarchy["bulk1"].to_string(index=False)},\n')
+        liczba = format(float(row_hierarchy["thick1"].to_string(index=False)) ,'.8f')
         self.file.write(f'thick = {liczba},\n')
 
         self.file.write('bulk1 = [-10000.00000000, -10000.00000000, -10000.00000000],\nthick1 = 0.00000000,\nbulk2 = [-10000.00000000, -10000.00000000, -10000.00000000],\nthick2 = 0.00000000,\n')
-        self.file.write(f'through_cond = "{wiersz_hier["throughCond"].to_string(index=False)}",\n')
+        self.file.write(f'through_cond = "{row_hierarchy["throughCond"].to_string(index=False)}",\n')
         self.file.write('conductance = 0.00000000,\nemittance = 0.00000000);')
 
     def add_bulks(self):
         materials = self.hierarchy[['bulk1','bulk2']].stack().dropna().unique()
 
         for material in materials:
-            wiersz = self.bulk.loc[self.bulk['Bulk Name'] == material]
-            val1 = wiersz["Density [Kg/m3]"].to_string(index=False)
-            val2 = wiersz["Specific heat [J/KgK]"].to_string(index=False)
-            val3 = wiersz["Thermal conductivity [w/mK]"].to_string(index=False)
+            row = self.bulk.loc[self.bulk['Bulk Name'] == material]
+            val1 = row["Density [Kg/m3]"].to_string(index=False)
+            val2 = row["Specific heat [J/KgK]"].to_string(index=False)
+            val3 = row["Thermal conductivity [w/mK]"].to_string(index=False)
             self.file.write(f"\nBULK {material} = [{format(float(val1),'.3f')}, {format(float(val2),'.3f')}, {format(float(val3),'.3f')}];")
         
     def add_optics(self):
         coats = self.hierarchy[['coat1','coat2']].stack().dropna().unique()
 
         for coat in coats:
-            wiersz = self.optical.loc[self.optical['OPTICAL Name'] == coat]
-            val1 = wiersz['ir_emiss'].to_string(index=False)
-            val2 = wiersz['ir_refl'].to_string(index=False)
-            val3 = wiersz['ir_trans'].to_string(index=False)
-            val4 = wiersz['solar_abs'].to_string(index=False)
-            val5 = wiersz['solar_ref'].to_string(index=False)
-            val6 = wiersz['solar_trans'].to_string(index=False)
-            val7 = wiersz['ir_spect_refl'].to_string(index=False)
-            val8 = wiersz['solar_spect_refl'].to_string(index=False)
+            row = self.optical.loc[self.optical['OPTICAL Name'] == coat]
+            val1 = row['ir_emiss'].to_string(index=False)
+            val2 = row['ir_refl'].to_string(index=False)
+            val3 = row['ir_trans'].to_string(index=False)
+            val4 = row['solar_abs'].to_string(index=False)
+            val5 = row['solar_ref'].to_string(index=False)
+            val6 = row['solar_trans'].to_string(index=False)
+            val7 = row['ir_spect_refl'].to_string(index=False)
+            val8 = row['solar_spect_refl'].to_string(index=False)
             lista = [val1,val2,val3,val4,val5,val6,val7,val8]
             tekst = ', '.join([format(float(i),'.6f') for i in lista])
             self.file.write(f'\nOPTICAL {coat} = [{tekst}];')
@@ -467,8 +458,8 @@ class Parser:
             self.file.write(f"\n\nGEOMETRY {materiał};\n{materiał} = {tekst};")
             
     def add_hier(self):
-        if self.hier_pierwsze['Col4'].isna().all(): #Jeśli czwarta kolumna pusta
-            self.result1 = self.helper_child_parent(self.hier_pierwsze.loc[:,["Col2","Col3"]])
+        if self.hier_first_cols['Col4'].isna().all(): #Jeśli czwarta kolumna pusta
+            self.result1 = self.helper_child_parent(self.hier_first_cols.loc[:,["Col2","Col3"]])
             for parent in self.result1:
                 if not self.result1[parent]:
                    continue
@@ -477,8 +468,8 @@ class Parser:
                    self.file.write(f"\nGEOMETRY {parent};\n{parent} = {lista};\n")
 
         else: #Jeśli jest czwarta kolumna
-            self.result1 = self.helper_child_parent(self.hier_pierwsze.loc[:,["Col3","Col4"]])
-            self.result2 = self.helper_child_parent(self.hier_pierwsze.loc[:,["Col2","Col3"]])
+            self.result1 = self.helper_child_parent(self.hier_first_cols.loc[:,["Col3","Col4"]])
+            self.result2 = self.helper_child_parent(self.hier_first_cols.loc[:,["Col2","Col3"]])
             for parent in self.result1:
                 if not self.result1[parent]:
                     continue
@@ -518,7 +509,7 @@ class Parser:
         return(parents)
         
     def assembly(self):
-        if self.hier_pierwsze['Col4'].isna().all(): #Jeśli czwarta kolumna pusta
+        if self.hier_first_cols['Col4'].isna().all(): #Jeśli czwarta kolumna pusta
             lista = ' + '.join(self.result1)
             self.file.write(f"\n\n{self.modelname} = {lista};\n")
         else:
@@ -561,7 +552,7 @@ class Parser:
 
 if __name__ == '__main__':
     
-    excel_path = r"C:/Users/koste/OneDrive/Pulpit/ESATAN_PARSER/2_FCU_PSU_v03/2_FCU_PSU_v03.xlsx"
-    bdf_path = r"C:/Users/koste/OneDrive/Pulpit/ESATAN_PARSER/2_FCU_PSU_v03/2_FCU_PSU_v03.bdf"
+    excel_path = "Example excel path"
+    bdf_path = "Example bdf path"
 
     parser = Parser(bdf_path,excel_path)
