@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QMessageBox,
 from PyQt5.QtGui import QPalette, QColor
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-
+from configparser import ConfigParser
 
 
 
@@ -21,31 +21,25 @@ from watchdog.events import FileSystemEventHandler
 class Ui(QtWidgets.QMainWindow):
     def __init__(self, *args, **kwargs):
         super(Ui,self).__init__(*args,**kwargs)
-        self.my_folder = r"C:\Users\koste\OneDrive\Pulpit\ESATAN_PARSER" #Tutaj zmienić na home
+        self.my_folder = os.path.dirname(os.path.abspath(sys.argv[0]))
         self.two_files_selected = False
         self.BDF_filename = None
         self.excel_filename = None
-        self.esrdg_path = None
-        self.gmm_folder = None
-        self.submodels_folder = None
-        self.workbench_folder = None
-        self.new_file_created = False                                            
-        self.last_erg_file = None                               
-        self.last_erg_file_path = None
-        self.button_size = 150
+        
+        
         self.setFixedSize(1300, 800)
-
         self.widget = QtWidgets.QWidget()
         self.setCentralWidget(self.widget) 
         self.setWindowTitle('FEMAP - ESATAN PARSER')
         self.ButtonContainer = QtWidgets.QGridLayout()
         self.main_layout = QHBoxLayout(self.widget)
 
-        
-        self.darkMode()
         self.createButtons()
+        self.config_load_last_session()
+        self.darkMode()
         self.esrdg_finder()
-
+        
+    
         self.main_layout.addLayout(self.ButtonContainer)
         self.main_layout.addWidget(self.text_edit)
 
@@ -72,7 +66,7 @@ class Ui(QtWidgets.QMainWindow):
 
     def createButtons(self):
         ###TWORZYMY WIDGETY I USTAWIAMY JE###
-        
+        self.button_size = 150
         self.EsatanButton = QtWidgets.QPushButton(self.widget)
         self.EsatanButton.setText("Wybierz folder z\nmodelami")
         self.EsatanButton.setFixedSize(self.button_size, self.button_size)
@@ -115,57 +109,67 @@ class Ui(QtWidgets.QMainWindow):
         self.clear_button.setFixedSize(self.button_size, self.button_size)
         self.ButtonContainer.addWidget(self.clear_button,2,0)
 
+        self.Default_button = QPushButton("Domyślne\nustawienia")
+        self.Default_button.clicked.connect(self.clear_console)
+        self.Default_button.setFixedSize(self.button_size, self.button_size)
+        self.ButtonContainer.addWidget(self.Default_button,2,1)
+
         self.text_edit = QTextEdit()
         font = self.text_edit.currentFont()
         font.setPointSize(13)
         self.text_edit.setFont(font)
         self.text_edit.setReadOnly(True)  # Ustaw tryb tylko do odczytu
+        self.append_text("\tFEMAP-ESATAN PARSER 2023**\n\tOprogramowane konwertujące\n")
 
     def get_BDFfile(self):   
         try:
             self.BDF_filename, _ = QFileDialog.getOpenFileName(self, 'Choose BDF file', self.my_folder, "BDF files (*.bdf)")
             
-            result = re.findall(r'[^//]+', self.BDF_filename)
-            self.BDFButton.setText(f"Wybrano \n {result[-1]}")
-            self.append_text(f"Wybrano {result[-1]} ")
-            self.BDFButton.setStyleSheet("background-color: green;")
-            QCoreApplication.processEvents()
-            # Sprawdź, czy nazwy plików BDF i Excel są takie same przed aktywowaniem create_parser
-            if self.are_files_selected():
-                if self.check_filenames():
-                    self.create_parser()
-                else:
-                    self.BDFButton.setStyleSheet("background-color: red;")
-                    QMessageBox.warning(self,'Ostrzeżenie','Nazwy plików BDF i Excel są różne. Wybierz pliki o takich samych nazwach.',QMessageBox.Ok)
+            if self.BDF_filename != None:
+                result = re.findall(r'[^//]+', self.BDF_filename)
+                self.BDFButton.setText(f"Wybrano \n {result[-1]}")
+                self.append_text(f"Wybrano {result[-1]} ")
+                self.BDFButton.setStyleSheet("background-color: green;")
+                QCoreApplication.processEvents()
+                # Sprawdź, czy nazwy plików BDF i Excel są takie same przed aktywowaniem create_parser
+                if self.are_files_selected():
+                    if self.check_filenames():
+                        self.create_parser()
+                    else:
+                        self.BDFButton.setStyleSheet("background-color: red;")
+                        QMessageBox.warning(self,'Ostrzeżenie','Nazwy plików BDF i Excel są różne. Wybierz pliki o takich samych nazwach.',QMessageBox.Ok)
         except:
             pass
 
     def get_XLSXfile(self):   
         try:
             self.excel_filename, _ = QFileDialog.getOpenFileName(self, 'Choose Excel file', self.my_folder, "Excel files (*.xlsx)")
-            result = re.findall(r'[^//]+', self.excel_filename)
-            self.ExcelButton.setText(f"Wybrano \n {result[-1]}")
-            self.append_text(f"Wybrano {result[-1]} ")
-            self.ExcelButton.setStyleSheet("background-color: green;")
-            QCoreApplication.processEvents()
-            # Sprawdź, czy nazwy plików BDF i Excel są takie same przed aktywowaniem create_parser
-            if self.are_files_selected():
-                if self.check_filenames(): 
-                    self.create_parser()
-                else:
-                    self.ExcelButton.setStyleSheet("background-color: red;")
-                    QMessageBox.warning(self,'Ostrzeżenie','Nazwy plików BDF i Excel są różne. Wybierz pliki o takich samych nazwach.',QMessageBox.Ok)
+            if self.excel_filename != None:
+                result = re.findall(r'[^//]+', self.excel_filename)
+                self.ExcelButton.setText(f"Wybrano \n {result[-1]}")
+                self.append_text(f"Wybrano {result[-1]} ")
+                self.ExcelButton.setStyleSheet("background-color: green;")
+                QCoreApplication.processEvents()
+                # Sprawdź, czy nazwy plików BDF i Excel są takie same przed aktywowaniem create_parser
+                if self.are_files_selected():
+                    if self.check_filenames(): 
+                        self.create_parser()
+                    else:
+                        self.ExcelButton.setStyleSheet("background-color: red;")
+                        QMessageBox.warning(self,'Ostrzeżenie','Nazwy plików BDF i Excel są różne. Wybierz pliki o takich samych nazwach.',QMessageBox.Ok)
+
         except:
             pass
 
     def check_filenames(self):
+        #Czy w ogóle
         # Sprawdź, czy nazwy plików BDF i Excel są takie same
         if self.BDF_filename and self.excel_filename:
             bdf_name = os.path.splitext(self.BDF_filename)[0]
             excel_name = os.path.splitext(self.excel_filename)[0]
-            print(bdf_name,excel_name)
             return bdf_name == excel_name
-        return False
+        else:
+            return False
 
     def are_files_selected(self):
         return self.BDF_filename is not None and self.excel_filename is not None
@@ -181,7 +185,6 @@ class Ui(QtWidgets.QMainWindow):
 
         # self.last_erg_file = self.EsatanParser.get_file_name()
         # self.last_erg_file_path = os.path.join(self.my_folder, self.last_erg_file)
-        self.new_file_created = True
         self.BDF_filename = None
         self.excel_filename = None
 
@@ -272,18 +275,22 @@ class Ui(QtWidgets.QMainWindow):
     #FUNKCJE DO TESTOWANIA ERGA
     
     def esrdg_finder(self):
+        #LITERY TYLKO DODAĆ
         nazwa_pliku = "esrdg.bat"
-        esrdg_folder = r'C:\ESATAN-TMS\2018sp1\Radiative\bin'
-        for root, dirs, files in os.walk(esrdg_folder):
-            try:
-                if nazwa_pliku in files:
-                    self.esrdg_path = os.path.join(root, nazwa_pliku)
-                    self.append_text(f"\nZnaleziono {nazwa_pliku} " + self.esrdg_path + "\n")
-                    return self.esrdg_path
-            except:
-                self.append_text(f"\nNie można znaleźć pliku {nazwa_pliku}\nProszę wyszukać ręcznie")
-        return None
-    
+        litery = "ABCDEFGHIJKLMNOPQRSTUWXYZ"
+        esrdg_folders = [f'{litery[i]}:\\ESATAN-TMS\\2018sp1\\Radiative\\bin' for i in range(len(litery))]
+        for esrdg_folder in esrdg_folders:
+            for root, dirs, files in os.walk(esrdg_folder):
+                try:
+                    if nazwa_pliku in files:
+                        self.esrdg_path = os.path.join(root, nazwa_pliku)
+                        self.append_text(f"\nZnaleziono {nazwa_pliku} " + self.esrdg_path + "\n")
+                        return self.esrdg_path
+                    else:
+                        continue
+                except:
+                    self.append_text(f"\nNie można znaleźć pliku {nazwa_pliku}\nProszę wyszukać ręcznie")
+            
     def esrdg_finder_manual(self):
         nazwa_pliku = "esrdg.bat"
         esrdg_folder = QFileDialog.getExistingDirectory(self, 'Wybierz folder')
@@ -301,24 +308,22 @@ class Ui(QtWidgets.QMainWindow):
         if not self.last_erg_file:
             #Nie ma nowego pliku - biorę ostatni
             self.znajdz_ostatni_erg(self.my_folder)
-            self.append_text(f"\nOstatni plik .erg {self.last_erg_file}\n")
 
         if self.gmm_folder and self.last_erg_file:
             #Wybrano folder z modelami i utworzono ostatnio plik
             self.przenies_ostatni_erg()
-            #self.create_batch_file()
+            self.create_batch_file()
         else:
             #Nie wybrano folderu z modelammi lub nie ma ostatnio żadnego pliku
             self.append_text(f"\nFolder GMM:{self.gmm_folder}\nOstatni plik: {self.last_erg_file}\n")
             self.append_text("\nNie utworzono pliku albo nie znaleziono folderu z modelami\n")
 
-    def znajdz_ostatni_erg(self, folder_programu):
-            self.append_text("\nSzukam ostatniego pliku .erg\n")
-            lista_plikow = [f for f in os.listdir(folder_programu) if f.endswith(".erg")]
+    def znajdz_ostatni_erg(self, my_folder):
+            lista_plikow = [f for f in os.listdir(my_folder) if f.endswith(".erg")]
             if lista_plikow:
-                self.last_erg_file = max(lista_plikow, key=lambda x: os.path.getctime(os.path.join(folder_programu, x)))
-                self.append_text(self.last_erg_file)
-                self.last_erg_file_path = os.path.join(folder_programu, self.last_erg_file)
+                self.last_erg_file = max(lista_plikow, key=lambda x: os.path.getctime(os.path.join(my_folder, x)))
+                self.append_text(f"Ostatni plik:{self.last_erg_file}")
+                self.last_erg_file_path = os.path.join(my_folder, self.last_erg_file)
 
     def przenies_ostatni_erg(self):
         if self.last_erg_file_path:
@@ -343,24 +348,108 @@ set\tPFAD_GMM={self.gmm_folder}\\
 
 rem call submodels
 call {self.esrdg_path} < %PFAD_GMM%02_SUBMODELS\{self.last_erg_file} >      %PFAD% {self.last_erg_file.split('.')[0]+'.out'}
-rem assemble model from module *.erg files
-call {self.esrdg_path} < %PFAD_GMM%Test_subj_1.erg >       %PFAD%99_Test_all.out
 
 pause
 '''
         # Nazwa pliku batch
         batch_file_name = os.path.join(self.gmm_folder, 'Test_subj_1.bat')
+        try:
+            with open(batch_file_name, "w") as batch_file:
+                batch_file.write(batch_content)
+            self.append_text(f"\n***Utworzono plik batch***\n{batch_file_name}\n")
+        except FileNotFoundError:
+            self.append_text(f"\nMusisz wybrać najpierw folder z SUBMODELS itp.")
 
-        with open(batch_file_name, "w") as batch_file:
-            batch_file.write(batch_content)
+    #ZAMYKANIE I ZAPISYWANIE USTAWIEŃ
 
-        self.append_text(f"\n***Utworzono plik batch: {batch_file_name}***\n")
+    def closeEvent(self, event):
+        result = self.confirmCloseDialog()
+        if result:
+            self.config_save()
+            event.accept()  
+        else:
+            event.ignore()
 
+    def confirmCloseDialog(self):
+        msg_box = QMessageBox(self)
+        msg_box.setIcon(QMessageBox.Question)
+        msg_box.setWindowTitle("Potwierdzenie zamknięcia")
+        msg_box.setText("Czy na pewno chcesz zamknąć program?")
+        msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        msg_box.setDefaultButton(QMessageBox.No)
+        result = msg_box.exec_()
+
+        return result == QMessageBox.Yes
+
+    def config_load_last_session(self):
+        lista_plikow = [f for f in os.listdir(self.my_folder) if f.endswith(".ini")]
+        if 'configLast.ini' in lista_plikow:
+            print('Znaleziono configLast.ini')
+            result = QMessageBox.question(self,'Ostatnia sesja','Czy chcesz wznowić ostatnią sesję?',QMessageBox.Yes | QMessageBox.No,QMessageBox.No)
+
+            if result == QMessageBox.Yes:
+                self.config_load_file('configLast.ini') 
+            else:
+                self.default_settings()
+        else:
+            self.default_settings()
+
+    def config_save(self):
+        file = 'configLast.ini'
+        configLast = ConfigParser()
+        configLast.add_section('path settings')
+        configLast.set('path settings','self.esrdg_path', 'None')
+        configLast.set('path settings','self.gmm_folder', f'{self.gmm_folder}')
+        configLast.set('path settings','self.submodels_folder', f'{self.submodels_folder}')
+        configLast.set('path settings','self.workbench_folder',f'{self.workbench_folder}')                                        
+        configLast.set('path settings','self.last_erg_file', 'None')                               
+        configLast.set('path settings','self.last_erg_file_path', 'None')
+
+        with open(file,'w') as configfile:
+            configLast.write(configfile)
+
+    def config_load_file(self,file):
+        self.config = ConfigParser()
+        self.config.read(file)
+        print("\n\tTO CO W CONFIGU\n")
+        print(self.config['path settings']['self.gmm_folder'])
+        print(self.config['path settings']['self.submodels_folder'])
+        print(self.config['path settings']['self.workbench_folder'])
+        print(self.config['path settings']['self.last_erg_file'])
+        print(self.config['path settings']['self.last_erg_file_path'])
+
+        self.esrdg_path = self.config['path settings']['self.esrdg_path']
+        self.gmm_folder = self.config['path settings']['self.gmm_folder']
+        self.submodels_folder = self.config['path settings']['self.submodels_folder']
+        self.workbench_folder = self.config['path settings']['self.workbench_folder']                                 
+        self.last_erg_file = self.config['path settings']['self.last_erg_file']
+        self.last_erg_file_path = self.config['path settings']['self.last_erg_file_path']
+        if not self.last_erg_file:
+            self.znajdz_ostatni_erg(self.my_folder)
+
+        if file != 'configDefault.ini':
+            self.append_text("\n***POPRZEDNIA SESJA***\n")
+            self.append_text(f"GMM:\n{self.gmm_folder}")
+            self.append_text(f"SUBM:\n{self.submodels_folder}")
+            self.append_text(f"WRKB:\n{self.workbench_folder}")
+            self.append_text(f"LAST FILE: {self.last_erg_file}")
+            self.append_text("\n***POPRZEDNIA SESJA***\n")
+        
+    def default_settings(self):
+        text = '''[path settings]
+self.esrdg_path = None
+self.gmm_folder = None
+self.submodels_folder = None
+self.workbench_folder = None                                            
+self.last_erg_file = None                               
+self.last_erg_file_path = None'''
+        with open('configDefault.ini','w') as file:
+            file.write(text)
+        self.config_load_file('configDefault.ini')
 
 if __name__ == '__main__':
     import sys
     app = QtWidgets.QApplication(sys.argv)
     ui = Ui()
     ui.show()
-    ui.append_text("**FEMAP-ESATAN PARSER 2023**\nOprogramowane konwertujące")
     sys.exit(app.exec_())
