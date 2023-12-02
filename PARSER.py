@@ -113,10 +113,18 @@ class Parser:
         print("\n#############################################\n")
 
     def get_file_name(self):
-        self.filename = self.bdffile.split(r'/')[-1]
-        self.filename = self.filename.split(".")[-2]
-        self.modelname = self.filename[2:]
-        print(f"\tNazwa pliku: {self.filename}\n")
+        if "/" in self.bdffile:
+            self.filename = self.bdffile.split(r'/')[-1]
+            self.filename = self.filename.split(".")[-2]
+            self.modelname = self.filename[2:]
+            print(f"\tNazwa pliku: {self.filename}\n")
+            return self.filename
+
+        elif "\\" in self.bdffile:
+            self.filename = self.bdffile.split("\\")[-1]
+            self.filename = self.filename.split(".")[-2]
+            self.modelname = self.filename[2:]
+            print(f"\tNazwa pliku: {self.filename}\n")
 
     def load_excel_data(self):
         Filter = True #Nan filter
@@ -125,19 +133,20 @@ class Parser:
         self.primitives = self.primitives.iloc[:,list(range(8)) + [9]]
         new_column_names = ["Primitives","node number","Config","Cutting","nodes 1","nodes 2","ratio1","ratio2","CAUTION"]
         self.primitives.columns = new_column_names
-        self.primitives['node number'] = self.primitives['node number'].apply(lambda x: str(x) if pd.notna(x) else x)
-        # Usunięcie zer i kropek
-        self.primitives['node number'] = self.primitives['node number'].str.replace(r'\.0', '', regex=True)
-        # Zamiana z powrotem na typ int (opcjonalnie)
-        self.primitives['node number'] = self.primitives['node number'].apply(lambda x: int(x) if pd.notna(x) else x)
-        #print(self.primitives)
+
+        if not (self.primitives.loc[:,["Primitives","node number"]].isna().all().all() or (self.primitives.loc[:,["Primitives","node number"]] == 0).all().all()):
+            self.primitives['node number'] = self.primitives['node number'].apply(lambda x: str(x) if pd.notna(x) else x)
+            # Usunięcie zer i kropek
+            self.primitives['node number'] = self.primitives['node number'].str.replace(r'\.0', '', regex=True)
+            # Zamiana z powrotem na typ int (opcjonalnie)
+            self.primitives['node number'] = self.primitives['node number'].apply(lambda x: int(x) if pd.notna(x) else x)
         
         self.cuts = pd.read_excel(self.excelfile,sheet_name="CUTS",na_filter = Filter)
         self.cuts = self.cuts.loc[:,["CUT Name","SHELL 1","SHELL 2"]]
 
         self.hierarchy = pd.read_excel(self.excelfile,sheet_name="HIERARCHY",na_filter = Filter)
         self.pid_index = self.hierarchy.columns.get_loc("PID")
-        self.hier_pierwsze = self.hierarchy.iloc[:,0:self.pid_index] #Jeśli nazwa modelu jest źle to tutaj                   
+        self.hier_pierwsze = self.hierarchy.iloc[:,0:self.pid_index]
         self.hierarchy = self.hierarchy.loc[:,["nodenumbers of side 1","End Ids","offset","act1","act2","coat1","coat2","bulk1","bulk2","thick1","thick2","unity1","unity2","throughCond","conductance","emittance","mass1","mass2","crit1","crit2","color1","color2"]]
 
         new_column_names = [f'Col{i+1}' for i in range(len(self.hier_pierwsze.columns))] 
@@ -157,7 +166,7 @@ class Parser:
     def load_bdf_data(self):
                 #   -.123          -3.123-3 tu dwie cyfry w inżynieru       ''0.''         -5.-3
         regex = r'([+-]?\.\d+)|(([+-]?\d\.\d+)-(\d))|(\s0\.\s)|(([+-]?\d\.)-(\d))'
-        
+
         with open(self.bdffile, 'r') as plik:
             linie = plik.readlines()
             i = 25
@@ -186,7 +195,6 @@ class Parser:
                     punkt = Point(id_num,floats[0],floats[1],floats[2])
                     self.points.append(punkt)
 
-#TUTAJ CHYBA ZROBIĘ OD RAZU APPLY CZY PASUJE FIGURA DO SHELL1 LUB SHELL2 LUB PRIMITIVE JEŚLI TAK TO DODAJĘ DO KTÓREJŚ Z LIST. NADAM IM NAZWY Z PRIMITIVES np. BOX_123 A POTEM JESZCZE PRZYDZIELĘ DO CUTS
                 elif linia.startswith('CTRIA3'):
                     dane = re.findall(r'[-+]?\d*\.\d+|\d+', linia)
                     figura = Triangle(int(dane[1]), int(dane[3]), int(dane[4]), int(dane[5]))
@@ -224,11 +232,8 @@ class Parser:
                     self.all_geometry[index] = primitive
             else:
                 continue
-        # for item in self.all_geometry:
-        #     if isinstance(item,Primitive):
-        #         print("\t",item) 
 
-    def nowy_plikERG(self): #TUTAJ JEST TWORZONY PLIK
+    def nowy_plikERG(self):
         with open(f"{self.filename}.erg","w") as self.file:
             self.file.write(f"BEGIN_MODEL {self.filename[2:]}\n")
             self.tekst("PODPIS")
@@ -248,8 +253,8 @@ class Parser:
             self.add_shells()
 
             self.tekst("START GROUP BLOCKS")
-            if not self.cuts.empty:
-                self.add_cuts()
+            # if not self.cuts.empty:
+            #     self.add_cuts()
 
             self.tekst("GROUPS")
             self.add_groups()
@@ -391,7 +396,7 @@ class Parser:
         materials = self.hierarchy[['bulk1','bulk2']].stack().dropna().unique()
 
         for material in materials:
-            wiersz = self.bulk.loc[self.bulk['Bulk Name'] == material]  #Wiersz pasujący
+            wiersz = self.bulk.loc[self.bulk['Bulk Name'] == material]
             val1 = wiersz["Density [Kg/m3]"].to_string(index=False)
             val2 = wiersz["Specific heat [J/KgK]"].to_string(index=False)
             val3 = wiersz["Thermal conductivity [w/mK]"].to_string(index=False)
@@ -401,7 +406,7 @@ class Parser:
         coats = self.hierarchy[['coat1','coat2']].stack().dropna().unique()
 
         for coat in coats:
-            wiersz = self.optical.loc[self.optical['OPTICAL Name'] == coat] #Wiersz pasujący
+            wiersz = self.optical.loc[self.optical['OPTICAL Name'] == coat]
             val1 = wiersz['ir_emiss'].to_string(index=False)
             val2 = wiersz['ir_refl'].to_string(index=False)
             val3 = wiersz['ir_trans'].to_string(index=False)
@@ -416,7 +421,6 @@ class Parser:
 
     def make_material_dict(self):
         dictionary = {}
-                                                        #Dictionary żeby dopasować figury do materiału
         for _ , row in self.hierarchy.iterrows():
             col1 = row["Col1"]
             col2 = row["Col2"]
@@ -429,12 +433,11 @@ class Parser:
                 key = col1 if pd.notna(col1) else (col2 if pd.notna(col2) else (col3 if pd.notna(col3) else col4))
                 dictionary[key] = (nodeNum,endNodeNum)
 
-                                                        #Pusty dictionary na materiały
         for k,v in dictionary.items():
             materiały = {k:[] for k,v in dictionary.items()}
 
-        for item in self.all_geometry:                #Tutaj sprawdzam czy prymityw geometryczny jest 
-            for key,ids in dictionary.items():          #w przedziale id-endid. Jeśli tak to dodaję do materiału
+        for item in self.all_geometry:                
+            for key,ids in dictionary.items():        
                 if ids[0] <= item.get_id() <= ids[1]:
                     materiały[key].append(str(item))
                 else:
@@ -451,11 +454,6 @@ class Parser:
                 shell2 = re.findall(r'\b\d+\b',row[2])
                 print(shell1,shell2)
 
-            # for item in self.all_geometry:
-            #     if self.fig_in_cuts()
-
-            #self.file.write(f"\nGEOMETRY cut_{row.loc['CUT Name']};\ncut_{row.loc['CUT Name']} = ")
-
         else:
             return
 
@@ -464,7 +462,6 @@ class Parser:
 
     def add_groups(self):
         materiały = self.make_material_dict()
-        # print(materiały)
         for materiał,lista in materiały.items():
             tekst = ' + '.join(lista)
             self.file.write(f"\n\nGEOMETRY {materiał};\n{materiał} = {tekst};")
@@ -490,6 +487,10 @@ class Parser:
                     self.file.write(f"\nGEOMETRY {parent};\n{parent} = {lista};\n")
 
             for parent in self.result2:
+
+                print(parent)
+                print(self.result2[parent])
+
                 if not self.result2[parent]:
                     continue
                 else:
@@ -509,9 +510,7 @@ class Parser:
                 start = original_indexes[i]
                 end = original_indexes[i+1]
                 ojciec = colX.iloc[i]
-                #print("Stary = ",ojciec)
                 children = colY[start:end+1].dropna().tolist()
-                #print("Dziecko = ",children)
                 parents[ojciec] = children
             except:
                 continue
@@ -531,7 +530,6 @@ class Parser:
             self.file.write("\n/*KONSTANTY KLOSIEWICZ*/\n")
 
         if tekst == "POINTS":
-            #TEKST
             self.file.write("\n/*--------------------------------------*/\n/*                 POINTS               */\n/*--------------------------------------*/\n")
 
         elif tekst == "OPTICAL":
@@ -563,12 +561,7 @@ class Parser:
 
 if __name__ == '__main__':
     
-
-    #Primitives, Cuts, Grupa Prim-cuts, Cyfry w BDF max 2 cyfry, Raport
-    #Po co, założenia, Idiotoodporne, Kod do pobrania i co trzeba pobrać, żeby dało się zmienić
-
-
-    excel_path = r"C:/Users/koste/OneDrive/Pulpit/ESATAN_PARSER/8_EROS_DU_v01/8_EROS_DU_v01.xlsx"
-    bdf_path = r"C:/Users/koste/OneDrive/Pulpit/ESATAN_PARSER/8_EROS_DU_v01/8_EROS_DU_v01.bdf"
+    excel_path = r"C:/Users/koste/OneDrive/Pulpit/ESATAN_PARSER/2_FCU_PSU_v03/2_FCU_PSU_v03.xlsx"
+    bdf_path = r"C:/Users/koste/OneDrive/Pulpit/ESATAN_PARSER/2_FCU_PSU_v03/2_FCU_PSU_v03.bdf"
 
     parser = Parser(bdf_path,excel_path)
