@@ -1,103 +1,11 @@
-import numpy as np
 import pandas as pd
 import re
-import sys
-from PyQt5.QtWidgets import QFileDialog
-from PyQt5 import QtCore,QtWidgets
-from PyQt5.QtCore import QDir
-from PyQt5.QtGui import QIcon,QFont
+from src.geometry import Point, Primitive, Triangle, Rectangle
 
-class Point:
-    def __init__(self,id,x,y,z):
-        self.id = id
-        self.x = x
-        self.y = y
-        self.z = z
-    
-    def __str__(self):
-        return f"ID: {self.id} [{self.x},{self.y},{self.z}]"
 
-    def get_pos(self):
-        return self.x, self.y, self.z
-    
-    def get_id(self):
-        return self.id
-    
-class Rectangle:
-    def __init__(self,id,p1,p2,p3,p4):
-        self.id = id
-        self.p1 = p1
-        self.p2 = p2
-        self.p3 = p3
-        self.p4 = p4
+class ERG_Parser:
 
-    def __str__(self):
-        return f"quad_{self.id}"
-    
-    def BIG(self):
-        return "SHELL_QUADRILATERAL"
-
-    def get_id(self):
-        return self.id
-    
-    def get_points(self):
-        return self.p1, self.p2, self.p3, self.p4
-
-class Triangle:
-    def __init__(self,id,p1,p2,p3):
-        self.id = id
-        self.p1 = p1
-        self.p2 = p2
-        self.p3 = p3
-        
-    def __str__(self):
-        return f"tria_{self.id}"
-    
-    def BIG(self):
-        return f"SHELL_TRIANGLE"
-    
-    def get_id(self):
-        return self.id
-    
-    def get_points(self):
-        return self.p1, self.p2, self.p3
-
-class Primitive:
-    def __init__(self,name,id,*args):
-        self.id = id
-        self.name = name.lower()
-        self.node_num = len(args)
-        if len(args) >= 3:
-            self.p1 = args[0]
-            self.p2 = args[1]
-            self.p3 = args[2]
-        if len(args) >= 4:
-            self.p4 = args[3]
-
-    def __str__(self):
-        return f"{self.name}_{self.id}"
-    
-    def BIG(self):
-        return f"SHELL_{self.name.upper()}"
-
-    def get_id(self):
-        return self.id
-
-    def get_points(self):
-        if self.node_num == 3:
-            return self.p1, self.p2, self.p3
-        if self.node_num == 4:
-            return self.p1, self.p2, self.p3, self.p4
-        else:
-            return "Wrong number of vertices"
-
-class Parser:
-
-    def __init__(self,bdffile,excelfile):
-        print("\n#############################################\n")
-        
-        self.bdffile = bdffile
-        self.excelfile = excelfile
+    def __init__(self):
         self.all_geometry = []
         self.any_primitive = []
         self.cquad4 = []
@@ -105,31 +13,34 @@ class Parser:
         self.points = []
         self.shell1 = []
         self.shell2 = []
-        self.load_excel_data()
-        self.load_bdf_data()
+        
+
+    def merge_files_into_ERG(self, bdffile, excelfile):
+        self.load_excel_data(excelfile)
+        self.load_bdf_data(bdffile)
         self.transform_to_primitives()
-        self.get_file_name()
+        self.filename, self.modelname = self.get_file_name(bdffile)
         self.nowy_plikERG()
-        print("\n#############################################\n")
 
-    def get_file_name(self):
-        if "/" in self.bdffile:
-            self.filename = self.bdffile.split(r'/')[-1]
-            self.filename = self.filename.split(".")[-2]
-            self.modelname = self.filename[2:]
-            print(f"\tFile name: {self.filename}\n")
-            return self.filename
+    def get_file_name(self, file):
+        if "/" in file:
+            filename = file.split(r'/')[-1]
+            filename = filename.split(".")[-2]
+            modelname = filename[2:]
+            print(f"\tFile name: {filename}\n")
+            
+        elif "\\" in file:
+            filename = file.split("\\")[-1]
+            filename = filename.split(".")[-2]
+            modelname = filename[2:]
+            print(f"\tFilename: {filename}\n")
+        
+        return filename, modelname
 
-        elif "\\" in self.bdffile:
-            self.filename = self.bdffile.split("\\")[-1]
-            self.filename = self.filename.split(".")[-2]
-            self.modelname = self.filename[2:]
-            print(f"\tFilename: {self.filename}\n")
-
-    def load_excel_data(self):
+    def load_excel_data(self, excelfile):
         Filter = True #Nan filter
 
-        self.primitives = pd.read_excel(self.excelfile,sheet_name="PRIMITIVES",na_filter = Filter)
+        self.primitives = pd.read_excel(excelfile,sheet_name="PRIMITIVES",na_filter = Filter)
         self.primitives = self.primitives.iloc[:,list(range(8)) + [9]]
         new_column_names = ["Primitives","node number","Config","Cutting","nodes 1","nodes 2","ratio1","ratio2","CAUTION"]
         self.primitives.columns = new_column_names
@@ -141,10 +52,10 @@ class Parser:
             # Adding them back (optional)
             self.primitives['node number'] = self.primitives['node number'].apply(lambda x: int(x) if pd.notna(x) else x)
         
-        self.cuts = pd.read_excel(self.excelfile,sheet_name="CUTS",na_filter = Filter)
+        self.cuts = pd.read_excel(excelfile,sheet_name="CUTS",na_filter = Filter)
         self.cuts = self.cuts.loc[:,["CUT Name","SHELL 1","SHELL 2"]]
 
-        self.hierarchy = pd.read_excel(self.excelfile,sheet_name="HIERARCHY",na_filter = Filter)
+        self.hierarchy = pd.read_excel(excelfile,sheet_name="HIERARCHY",na_filter = Filter)
         self.pid_index = self.hierarchy.columns.get_loc("PID")
         self.hier_first_cols = self.hierarchy.iloc[:,0:self.pid_index]
         self.hierarchy = self.hierarchy.loc[:,["nodenumbers of side 1","End Ids","offset","act1","act2","coat1","coat2","bulk1","bulk2","thick1","thick2","unity1","unity2","throughCond","conductance","emittance","mass1","mass2","crit1","crit2","color1","color2"]]
@@ -153,78 +64,94 @@ class Parser:
         self.hier_first_cols.columns = new_column_names                                   
         self.hierarchy = pd.concat([self.hier_first_cols,self.hierarchy], axis = 1)       
                                                                             
-        self.bulk = pd.read_excel(self.excelfile,sheet_name="BULK",na_filter = Filter)
+        self.bulk = pd.read_excel(excelfile,sheet_name="BULK",na_filter = Filter)
         self.bulk = self.bulk.loc[:,["Bulk Name","Density [Kg/m3]","Specific heat [J/KgK]","Thermal conductivity [w/mK]"]]
 
-        self.optical = pd.read_excel(self.excelfile,sheet_name="OPTICAL",na_filter = Filter)
+        self.optical = pd.read_excel(excelfile,sheet_name="OPTICAL",na_filter = Filter)
         self.optical = self.optical.loc[:,["OPTICAL Name","ir_emiss","ir_refl","ir_trans","solar_abs","solar_ref","solar_trans","ir_spect_refl","solar_spect_refl","Control IR","Control Solar","Alp/Eps"]]
 
-        self.settings = pd.read_excel(self.excelfile,sheet_name="Settings",na_filter = Filter)
+        self.settings = pd.read_excel(excelfile,sheet_name="Settings",na_filter = Filter)
 
         print("\n\tExcel data loaded succesfully")
 
-    def load_bdf_data(self):
-                #   -.123          -3.123-3 engineer       ''0.''         -5.-3
-        regex = r'([+-]?\.\d+)|(([+-]?\d\.\d+)-(\d))|(\s0\.\s)|(([+-]?\d\.)-(\d))'
+    def load_bdf_data(self, bdffile, debug=False):       
+                                        # .123-3
+                        #   -.123          -3.123-3 engineer       ''0.''         -5.-3
+        self.regex_ptrn = r'([+-]?\.\d+)|(([+-]?\d\.\d+)-(\d))|(\s0\.\s)|(([+-]?\d\.)-(\d))'
 
-        with open(self.bdffile, 'r') as plik:
-            linie = plik.readlines()
-            i = 25
-            for linia in linie:
-                if linia.startswith('GRID'):
-                    floats = []
-                    id_num = re.findall(r'\b\d+\b', linia)[0]    
-                    found = re.findall(regex, linia)
-                    for Duple in found:
-                        for num in Duple:
-                            if num == '':
-                                continue
-                            elif re.match(r'(\s0\.\s)|([+-]?\.\d+)',num):
-                                #           ''0.''         -.123
-                                floats.append(num)
+        with open(bdffile, 'r') as file:
+            lines = file.readlines()
+            for line in lines:
+                if debug:
+                    print(line)
+                    print(type(line))
 
-                            elif re.match(r'([+-]?\d\.\d+)-(\d)', num): 
-                                #               -3.123-3
-                                floats.append(self.convert_engi(Duple[2],Duple[3]))
-                            
-                            elif re.match(r'([+-]?\d\.)-(\d)', num):
-                                 #          -5.-3
-                                floats.append(self.convert_engi(Duple[6],Duple[7]))
+                if line.startswith('GRID'):
+                    self.line_to_point(line)
 
-                    floats = [format(float(i),'.8f') for i in floats]
-                    punkt = Point(id_num,floats[0],floats[1],floats[2])
-                    self.points.append(punkt)
-
-                elif linia.startswith('CTRIA3'):
-                    dane = re.findall(r'[-+]?\d*\.\d+|\d+', linia)
-                    figura = Triangle(int(dane[1]), int(dane[3]), int(dane[4]), int(dane[5]))
-                    self.ctria3.append(figura)
+                elif line.startswith('CTRIA3'):
+                    self.line_to_triang(line)
                 
-                elif linia.startswith('CQUAD4'):
-                    dane = re.findall(r'[-+]?\d*\.\d+|\d+', linia)
-                    figura = Rectangle(int(dane[1]),int(dane[3]), int(dane[4]), int(dane[5]),int(dane[6]))
-                    self.cquad4.append(figura)
+                elif line.startswith('CQUAD4'):
+                    self.line_to_rect(line)
 
         self.all_geometry = self.ctria3+self.cquad4
         print("\n\tBDF data loaded succesfully\n")
-        return
     
-    def convert_engi(self,base_number,exp):
+    def convert_engi(self, base_number,exp):
             result = (float(base_number)) * 10 ** (-int(exp))
             return result
     
+    def line_to_point(self, line):
+       coords = []
+       id_num = re.findall(r'\b\d+\b', line)[0]    
+       found = re.findall(self.regex_ptrn, line)
+       for Duple in found:
+           for num in Duple:
+               if num == '':
+                   continue
+               elif re.match(r'(\s0\.\s)|([+-]?\.\d+)',num):
+                   #           ''0.''         -.123
+                   coords.append(num)
+
+               elif re.match(r'([+-]?\d\.\d+)-(\d)', num): 
+                   #               -3.123-3
+                   coords.append(self.convert_engi(Duple[2],Duple[3]))
+               
+               elif re.match(r'([+-]?\d\.)-(\d)', num):
+                       #          -5.-3
+                   coords.append(self.convert_engi(Duple[6],Duple[7]))
+
+       coords = [format(float(i),'.8f') for i in coords]
+       node = Point(id_num,coords[0],coords[1],coords[2])
+       self.points.append(node)
+       return node
+
+    def line_to_rect(self, line):
+        dane = re.findall(r'[-+]?\d*\.\d+|\d+', line)
+        figura = Rectangle(int(dane[1]),int(dane[3]), int(dane[4]), int(dane[5]),int(dane[6]))
+        self.cquad4.append(figura)
+
+    def line_to_triang(self, line):
+        dane = re.findall(r'[-+]?\d*\.\d+|\d+', line)
+        figura = Triangle(int(dane[1]), int(dane[3]), int(dane[4]), int(dane[5]))
+        self.ctria3.append(figura)
+
     def transform_to_primitives(self):
         print("\tLooking for primitives...")
         for index, item in enumerate(self.all_geometry):
             Id = item.get_id()
             row_primitive = self.primitives[self.primitives.apply(self.check_id_prim, args=(Id,),axis=1)]
+            
             if not row_primitive.empty:
                 primitive_name = row_primitive["Primitives"].values[0]
+
                 if isinstance(item,Triangle):
                     p1,p2,p3 = item.get_points()
                     primitive = Primitive(primitive_name,Id,p1,p2,p3)
                     self.any_primitive.append(primitive)
                     self.all_geometry[index] = primitive
+
                 elif isinstance(item,Rectangle):
                     p1,p2,p3,p4 = item.get_points()
                     primitive = Primitive(primitive_name,Id,p1,p2,p3,p4)
@@ -232,6 +159,10 @@ class Parser:
                     self.all_geometry[index] = primitive
             else:
                 continue
+
+# class ERG_Creator:
+#     def __init__(self):
+#         pass
 
     def nowy_plikERG(self):
         with open(f"{self.filename}.erg","w") as self.file:
@@ -547,12 +478,3 @@ class Parser:
 
         elif tekst == "END":
             self.file.write("\n/****************************************/\n\nPURGE_MODEL();\nEND_MODEL")
-
-
-
-if __name__ == '__main__':
-    
-    excel_path = "Example excel path"
-    bdf_path = "Example bdf path"
-
-    parser = Parser(bdf_path,excel_path)

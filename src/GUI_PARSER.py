@@ -1,18 +1,21 @@
 import sys
 import re
-import time
 import os
 import shutil
 
-from PARSER import Parser,Point,Triangle,Rectangle
-from PyQt5 import QtCore,QtWidgets
-from PyQt5.QtCore import QDir, Qt, QCoreApplication
-from PyQt5.QtGui import QIcon,QFont
-from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QFileDialog, QVBoxLayout, QWidget, QLabel, QHBoxLayout
-from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QMessageBox, QTextEdit,QStyleFactory
+from src.PARSER import ERG_Parser
+from PyQt5 import QtWidgets
+from PyQt5.QtCore import Qt, QCoreApplication
+from PyQt5.QtWidgets import (
+    QApplication, 
+    QPushButton, 
+    QFileDialog, 
+    QHBoxLayout, 
+    QMessageBox, 
+    QTextEdit,
+    QStyleFactory
+    )
 from PyQt5.QtGui import QPalette, QColor
-from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler
 from configparser import ConfigParser
 
 
@@ -177,7 +180,7 @@ class Ui(QtWidgets.QMainWindow):
     def create_parser(self):
         self.append_text('Rozpoczynam konwersję')
         QCoreApplication.processEvents()
-        self.EsatanParser = Parser(self.BDF_filename, self.excel_filename)
+        self.EsatanParser = ERG_Parser(self.BDF_filename, self.excel_filename)
         self.append_text(f'Pomyślnie stworzono plik "{self.EsatanParser.get_file_name()}.erg"')
         self.znajdz_ostatni_erg(self.my_folder)
         self.BDFButton.setStyleSheet(self.dark_palette)
