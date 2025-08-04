@@ -1,26 +1,47 @@
 import pandas as pd
 import re
+from pathlib import Path
 from src.geometry import Point, Primitive, Triangle, Rectangle
 
 
 class ERG_Parser:
 
-    def __init__(self):
+    def __init__(self, outputdir='output'):
+        self.primitives = None
+        self.cuts = None
+        self.hierarchy = None
+        self.optical = None 
+        self.settings = None
+        self.bulk = None
         self.all_geometry = []
-        self.any_primitive = []
+        # self.any_primitive = []
         self.cquad4 = []
         self.ctria3 = []
         self.points = []
         self.shell1 = []
         self.shell2 = []
+        self.outputdir = outputdir
         
-
+        
     def merge_files_into_ERG(self, bdffile, excelfile):
         self.load_excel_data(excelfile)
         self.load_bdf_data(bdffile)
-        self.transform_to_primitives()
-        self.filename, self.modelname = self.get_file_name(bdffile)
-        self.nowy_plikERG()
+        filename, modelname = self.get_file_name(bdffile)
+
+        creator = ERG_Creator(filename=filename,
+                              modelname = modelname,
+                              points=self.points,
+                              geometry=self.all_geometry,
+                              primitives=self.primitives,
+                              cuts=self.cuts,
+                              hierarchy=self.hierarchy,
+                              hier_first_cols=self.hier_first_cols,
+                              optical=self.optical,
+                              settings=self.settings,
+                              bulk=self.bulk,
+                              outputdir=self.outputdir)
+        creator.nowy_plikERG()
+        print("DONE!")
 
     def get_file_name(self, file):
         if "/" in file:
@@ -77,19 +98,16 @@ class ERG_Parser:
     def load_bdf_data(self, bdffile, debug=False):       
                                         # .123-3
                         #   -.123          -3.123-3 engineer       ''0.''         -5.-3
-        self.regex_ptrn = r'([+-]?\.\d+)|(([+-]?\d\.\d+)-(\d))|(\s0\.\s)|(([+-]?\d\.)-(\d))'
+        # self.regex_ptrn = r'([+-]?\.\d+)|(([+-]?\d\.\d+)-(\d))|(\s0\.\s)|(([+-]?\d\.)-(\d))'
 
         with open(bdffile, 'r') as file:
             lines = file.readlines()
             for line in lines:
-                if debug:
-                    print(line)
-                    print(type(line))
-
-                if line.startswith('GRID'):
+                
+                if line.startswith("GRID"):
                     self.line_to_point(line)
 
-                elif line.startswith('CTRIA3'):
+                elif line.startswith("CTRIA3"):
                     self.line_to_triang(line)
                 
                 elif line.startswith('CQUAD4'):
@@ -98,75 +116,81 @@ class ERG_Parser:
         self.all_geometry = self.ctria3+self.cquad4
         print("\n\tBDF data loaded succesfully\n")
     
-    def convert_engi(self, base_number,exp):
-            result = (float(base_number)) * 10 ** (-int(exp))
-            return result
+    def split_f8(self, line: str) -> list[str]:
+        """List of 8-char fields"""
+        return [line[i:i+8].strip() for i in range(0, len(line), 8)]
+
+    def f8_to_float(self, field: str) -> float:
+        if not field:
+            return 0.0 # UWAGA!
+        if 'e' not in field.lower():
+            m = re.search(r'([+-])(?!.*[+-])', field[1:])   # ostatni +/- po indeksie 0
+        if m:
+            i = m.start() + 1       
+            field = field[:i] + 'e' + field[i:]
+        return float(field)
     
-    def line_to_point(self, line):
-       coords = []
-       id_num = re.findall(r'\b\d+\b', line)[0]    
-       found = re.findall(self.regex_ptrn, line)
-       for Duple in found:
-           for num in Duple:
-               if num == '':
-                   continue
-               elif re.match(r'(\s0\.\s)|([+-]?\.\d+)',num):
-                   #           ''0.''         -.123
-                   coords.append(num)
+    def line_to_point(self, line: str):
+        fields = self.split_f8(line)
+        # print(fields)
+        id = int(fields[1])
+        x = self.f8_to_float(fields[3])
+        y = self.f8_to_float(fields[4])
+        z = self.f8_to_float(fields[5])
 
-               elif re.match(r'([+-]?\d\.\d+)-(\d)', num): 
-                   #               -3.123-3
-                   coords.append(self.convert_engi(Duple[2],Duple[3]))
-               
-               elif re.match(r'([+-]?\d\.)-(\d)', num):
-                       #          -5.-3
-                   coords.append(self.convert_engi(Duple[6],Duple[7]))
+        node = Point(id=id, x=x, y=y, z=z)
+        self.points.append(node)
+        return node
 
-       coords = [format(float(i),'.8f') for i in coords]
-       node = Point(id_num,coords[0],coords[1],coords[2])
-       self.points.append(node)
-       return node
-
-    def line_to_rect(self, line):
-        dane = re.findall(r'[-+]?\d*\.\d+|\d+', line)
-        figura = Rectangle(int(dane[1]),int(dane[3]), int(dane[4]), int(dane[5]),int(dane[6]))
+    def line_to_rect(self, line: str):
+        fields = self.split_f8(line)
+        id = int(fields[1])
+        p1 = int(fields[3])
+        p2 = int(fields[4])
+        p3 = int(fields[5])
+        p4 = int(fields[6])
+        figura = Rectangle(id=id, p1=p1, p2=p2, p3=p3, p4=p4)
         self.cquad4.append(figura)
 
-    def line_to_triang(self, line):
-        dane = re.findall(r'[-+]?\d*\.\d+|\d+', line)
-        figura = Triangle(int(dane[1]), int(dane[3]), int(dane[4]), int(dane[5]))
+    def line_to_triang(self, line: str):
+        fields = self.split_f8(line)
+        id = int(fields[1])
+        p1 = int(fields[3])
+        p2 = int(fields[4])
+        p3 = int(fields[5])
+        figura = Triangle(id=id, p1=p1, p2=p2, p3=p3)
         self.ctria3.append(figura)
 
-    def transform_to_primitives(self):
-        print("\tLooking for primitives...")
-        for index, item in enumerate(self.all_geometry):
-            Id = item.get_id()
-            row_primitive = self.primitives[self.primitives.apply(self.check_id_prim, args=(Id,),axis=1)]
-            
-            if not row_primitive.empty:
-                primitive_name = row_primitive["Primitives"].values[0]
+class ERG_Creator:
+   
+    def __init__(self, filename, modelname, points, geometry, primitives,
+                  cuts, hierarchy, hier_first_cols, optical, settings, bulk, outputdir="output"):
+        print("Creating '.erg' file")
 
-                if isinstance(item,Triangle):
-                    p1,p2,p3 = item.get_points()
-                    primitive = Primitive(primitive_name,Id,p1,p2,p3)
-                    self.any_primitive.append(primitive)
-                    self.all_geometry[index] = primitive
+        self.modelname = modelname
+        outputdir = Path(outputdir)
+        outputdir.mkdir(parents=True, exist_ok=True)
+        self.file_path = outputdir / f"{filename}.erg"
 
-                elif isinstance(item,Rectangle):
-                    p1,p2,p3,p4 = item.get_points()
-                    primitive = Primitive(primitive_name,Id,p1,p2,p3,p4)
-                    self.any_primitive.append(primitive)
-                    self.all_geometry[index] = primitive
-            else:
-                continue
-
-# class ERG_Creator:
-#     def __init__(self):
-#         pass
+        self.points = points
+        self.all_geometry = geometry
+        self.primitives = primitives
+        self.cuts = cuts
+        self.hierarchy = hierarchy
+        self.hier_first_cols = hier_first_cols
+        self.optical = optical
+        self.settings = settings
+        self.bulk = bulk
+        # self.any_primitive = []
+       
+        self.shell1 = []
+        self.shell2 = []
 
     def nowy_plikERG(self):
-        with open(f"{self.filename}.erg","w") as self.file:
-            self.file.write(f"BEGIN_MODEL {self.filename[2:]}\n")
+        self.transform_to_primitives()
+
+        with self.file_path.open("w") as self.file:
+            self.file.write(f"BEGIN_MODEL {self.modelname}\n")
             self.tekst("PODPIS")
 
             self.tekst("BULKS")
@@ -231,6 +255,28 @@ class ERG_Parser:
 
             else:
                 print("Wrong definition of primitive")
+
+    def transform_to_primitives(self):
+        for index, item in enumerate(self.all_geometry):
+            Id = item.get_id()
+            row_primitive = self.primitives[self.primitives.apply(self.check_id_prim, args=(Id,),axis=1)]
+            
+            if not row_primitive.empty:
+                primitive_name = row_primitive["Primitives"].values[0]
+
+                if isinstance(item,Triangle):
+                    p1,p2,p3 = item.get_points()
+                    primitive = Primitive(primitive_name,Id,p1,p2,p3)
+                    # self.any_primitive.append(primitive)
+                    self.all_geometry[index] = primitive
+
+                elif isinstance(item,Rectangle):
+                    p1,p2,p3,p4 = item.get_points()
+                    primitive = Primitive(primitive_name,Id,p1,p2,p3,p4)
+                    # self.any_primitive.append(primitive)
+                    self.all_geometry[index] = primitive
+            else:
+                continue
 
     def check_id_hier(self,row,moje_id):
         if pd.notnull(row['nodenumbers of side 1']) and pd.notnull(row['End Ids']):
@@ -366,18 +412,18 @@ class ERG_Parser:
                     continue
         return materiały
     
-    def add_cuts(self):
-        for item in self.any_primitive:
-            print(item.get_id())
-        for index,row in self.cuts.iterrows():
-            if not row.isnull().all():
-                print(row[0],row[1],row[2])
-                shell1 = re.findall(r'\b\d+\b',row[1])
-                shell2 = re.findall(r'\b\d+\b',row[2])
-                print(shell1,shell2)
+    # def add_cuts(self):
+    #     for item in self.any_primitive:
+    #         print(item.get_id())
+    #     for index,row in self.cuts.iterrows():
+    #         if not row.isnull().all():
+    #             print(row[0],row[1],row[2])
+    #             shell1 = re.findall(r'\b\d+\b',row[1])
+    #             shell2 = re.findall(r'\b\d+\b',row[2])
+    #             print(shell1,shell2)
 
-        else:
-            return
+    #     else:
+    #         return
 
     def fig_in_cuts(self,id_fig,id_in_cuts):
         return  id_fig == id_in_cuts
@@ -410,8 +456,8 @@ class ERG_Parser:
 
             for parent in self.result2:
 
-                print(parent)
-                print(self.result2[parent])
+                # print(parent)
+                # print(self.result2[parent])
 
                 if not self.result2[parent]:
                     continue

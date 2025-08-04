@@ -6,3 +6,5 @@ __pycache__
 Esatan_case_folder
 models
 .exe
+.pytest_cache
+.venv
