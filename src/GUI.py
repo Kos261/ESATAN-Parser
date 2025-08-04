@@ -4,7 +4,7 @@ from pathlib import Path
 
 from src.PARSER import ERG_Parser
 from PyQt5 import QtWidgets
-from PyQt5.QtCore import Qt, QCoreApplication
+from PyQt5.QtCore import Qt, QCoreApplication, QSettings
 from PyQt5.QtWidgets import (
     QApplication, 
     QPushButton, 
@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import (
     QHBoxLayout, 
     QMessageBox, 
     QTextEdit,
+    QLineEdit,
     QStyleFactory
     )
 from PyQt5.QtGui import QPalette, QColor
@@ -24,38 +25,20 @@ class Ui(QtWidgets.QMainWindow):
     
     def __init__(self, *args, **kwargs):
         super(Ui,self).__init__(*args,**kwargs)
+        self.settings = QSettings("CBK", "Esatan-Parser")
+        self.init_state() # Only attributes
+        self.setup_ui()   # Only creating widgets
+        self.connect_signals()
+        # self.load_config()
         
-        self.my_folder = os.path.dirname(os.path.abspath(sys.argv[0]))
-        # self.my_folder = Path(__file__).parent.resolve()
-        self.createButtons()
-        self.load_config()
+    def init_state(self):
         self.two_files_selected = False
         self.BDF_filename = None
         self.excel_filename = None
-        self.setFixedSize(800, 400) 
-        self.widget = QtWidgets.QWidget()
-        self.setCentralWidget(self.widget)
-        self.setWindowTitle("FEMAP - ESATAN PARSER")
+        self.app_dir = getattr(self, "app_dir", str(Path.cwd()))
+        self.outputdir = self.settings.value("output/dir", self.app_dir, type=str)
 
-        # main_layout = QHBoxLayout(self.widget)
-
-        
-        self.ButtonContainer = QtWidgets.QGridLayout()
-        self.ButtonContainer.addWidget(self.BDFButton, 0, 0)
-        self.ButtonContainer.addWidget(self.ExcelButton, 0, 1)
-       
-
-        left_panel = QtWidgets.QVBoxLayout()
-        left_panel.addLayout(self.ButtonContainer)
-        left_panel.addWidget(self.out_type)
     
-        main_layout = QtWidgets.QHBoxLayout(self.widget)
-        main_layout.addLayout(left_panel)
-        main_layout.addWidget(self.console)
-        self.widget.setLayout(main_layout)
-
-        self.darkMode()
-
     def darkMode(self):
         # Tworzenie ciemnego motywu
         self.dark_palette = QPalette()
@@ -77,18 +60,20 @@ class Ui(QtWidgets.QMainWindow):
         # Ustawianie ciemnego stylu
         QApplication.setStyle(QStyleFactory.create('Fusion'))
 
-    def createButtons(self):
+    def setup_ui(self):
+        self.setFixedSize(800, 400) 
+        self.widget = QtWidgets.QWidget()
+        self.setCentralWidget(self.widget)
+        self.setWindowTitle("FEMAP - ESATAN PARSER")
         self.button_size = 150
          
         self.BDFButton = QtWidgets.QPushButton()
         self.BDFButton.setText("Plik BDF")
         self.BDFButton.setFixedSize(self.button_size, self.button_size)
-        self.BDFButton.clicked.connect(self.get_BDFfile)
 
         self.ExcelButton = QtWidgets.QPushButton()
         self.ExcelButton.setText("Plik Excel")
         self.ExcelButton.setFixedSize(self.button_size, self.button_size)
-        self.ExcelButton.clicked.connect(self.get_XLSXfile)
 
         self.console = QTextEdit()
         font = self.console.currentFont()
@@ -101,60 +86,99 @@ class Ui(QtWidgets.QMainWindow):
             '<span style="color:#9e9e9e; font-size:10pt;">© 2025 Konstanty Kłosiewicz CBK • MIT License</span>'
         )
 
-        self.out_type = QTextEdit()
-        self.out_type.setPlaceholderText("Type output directory")
-        font = self.out_type.currentFont()
-        font.setPointSize(13)
-        self.out_type.setFont(font)
-        self.out_type.setFixedHeight(40)
+        self.ButtonContainer = QtWidgets.QGridLayout()
+        self.ButtonContainer.addWidget(self.BDFButton, 0, 0)
+        self.ButtonContainer.addWidget(self.ExcelButton, 0, 1)
+       
+        left_panel = QtWidgets.QVBoxLayout()
+        left_panel.addLayout(self.ButtonContainer)
 
-        # self.clear_button = QPushButton("Clear\nconsole")
-        # self.clear_button.clicked.connect(self.clear_console)
-        # self.clear_button.setFixedSize(self.button_size, self.button_size)
-        # self.ButtonContainer.addWidget(self.clear_button,2,0)
+        row = QtWidgets.QHBoxLayout()
+        self.out_lineedit = QLineEdit()
+        self.out_lineedit.setPlaceholderText(self.outputdir)
+        self.outButton = QtWidgets.QPushButton()
+        self.outButton.setIcon(self.style().standardIcon(QtWidgets.QStyle.SP_DirOpenIcon))
+        # self.outButton.setText("Output")
+        self.outButton.setFixedWidth(50)
+        row.addWidget(self.out_lineedit, 1)
+        row.addWidget(self.outButton, 0)
+        left_panel.addLayout(row)
 
+
+        main_layout = QtWidgets.QHBoxLayout(self.widget)
+        main_layout.addLayout(left_panel)
+        main_layout.addWidget(self.console)
+        self.widget.setLayout(main_layout)
+
+        self.darkMode()
+
+    def connect_signals(self):
+        self.ExcelButton.clicked.connect(self.get_XLSXfile)
+        self.BDFButton.clicked.connect(self.get_BDFfile)
+        self.outButton.clicked.connect(self.choose_outputdir)
+        self.out_lineedit.editingFinished.connect(self._persist_outdir)
+        
+    def _start_dir(self, key):
+        return self.settings.value(key, self.app_dir)
+
+    def _persist_outdir(self):
+        self.outputdir = self.out_lineedit.text().strip()
+        self.settings.setValue("output/dir", self.outputdir)
+
+    def choose_outputdir(self):
+        start = self.settings.value("output/dir", self.app_dir, type=str)
+        d = QFileDialog.getExistingDirectory(self, "Wybierz folder wyjściowy", start)
+        if d:
+            self.outputdir = d
+            self.out_lineedit.setText(d)  
 
     def get_BDFfile(self):   
-        try:
-            self.BDF_filename, _ = QFileDialog.getOpenFileName(self, 'Choose BDF file', self.my_folder, "BDF files (*.bdf)")
-            
-            if self.BDF_filename != None and self.BDF_filename !='':
-                result = re.findall(r'[^//]+', self.BDF_filename)
-                self.BDFButton.setText(f"Wybrano \n {result[-1]}")
-                self.append_text(f"Wybrano {result[-1]} ")
-                self.BDFButton.setStyleSheet("background-color: green;")
-                QCoreApplication.processEvents()
-                
-                if self.are_files_selected():
-                    if self.check_filenames():
-                        self.create_parser()
-                    else:
-                        self.BDFButton.setStyleSheet("background-color: red;")
-                        QMessageBox.warning(self,'Warning!','Different names!',QMessageBox.Ok)
+        start_dir = self._start_dir("lastDir/bdf")
+        fname, _ = QFileDialog.getOpenFileName(self, 'Choose BDF file', start_dir, "BDF files (*.bdf)")
 
-        except (FileNotFoundError, IOError):
-            self.append_text("Wrong file or file path")
+        if not fname:
+            return
+        
+        p = Path(fname)
+        self.settings.setValue("lastDir/bdf", str(p.parent))
+        self.BDF_filename = str(p)
+        self.BDFButton.setText(f"Wybrano \n {p.name}")
+        self.append_text(f"Wybrano {p.name} ")
+        self.BDFButton.setStyleSheet("background-color: green;")
+        QCoreApplication.processEvents()
+
+        if self.are_files_selected():
+            
+            if self.check_filenames():
+                self.create_parser()
+            
+            else:
+                self.BDFButton.setStyleSheet("background-color: red;")
+                QMessageBox.warning(self, "Warning!", "Different names!", QMessageBox.Ok)
 
     def get_XLSXfile(self):   
-        try:
-            self.excel_filename, _ = QFileDialog.getOpenFileName(self, 'Choose Excel file', self.my_folder, "Excel files (*.xlsx)")
+        start_dir = self._start_dir("lastDir/xlsx")
+        fname, _ = QFileDialog.getOpenFileName(self, 'Choose Excel file', start_dir, "Xlsx files (*.xlsx)")
 
-            if self.excel_filename != None and self.excel_filename !='':
-                result = re.findall(r'[^//]+', self.excel_filename)
-                self.ExcelButton.setText(f"Wybrano \n {result[-1]}")
-                self.append_text(f"Wybrano {result[-1]} ")
-                self.ExcelButton.setStyleSheet("background-color: green;")
-                QCoreApplication.processEvents()
-                
-                if self.are_files_selected():
-                    if self.check_filenames(): 
-                        self.create_parser()
-                    else:
-                        self.ExcelButton.setStyleSheet("background-color: red;")
-                        QMessageBox.warning(self,'Warning!','Different names!',QMessageBox.Ok)
+        if not fname:
+            return
+        
+        p = Path(fname)
+        self.settings.setValue("lastDir/xlsx", str(p.parent))
+        self.excel_filename = str(p)
+        self.ExcelButton.setText(f"{p.name}")
+        self.append_text(f"Chosen {p.name} ")
+        self.ExcelButton.setStyleSheet("background-color: green;")
+        QCoreApplication.processEvents()
 
-        except:
-            pass
+        if self.are_files_selected():
+            
+            if self.check_filenames():
+                self.create_parser()
+            
+            else:
+                self.ExcelButton.setStyleSheet("background-color: red;")
+                QMessageBox.warning(self, "Warning!", "Different names!", QMessageBox.Ok)
 
     def check_filenames(self):
         #Czy w ogóle
@@ -170,44 +194,39 @@ class Ui(QtWidgets.QMainWindow):
         return self.BDF_filename is not None and self.excel_filename is not None
  
     def create_parser(self):
-        self.outputdir = self.out_type.toPlainText()
+        self.outputdir = self.out_lineedit.text().strip() or self.outputdir
+        self.settings.setValue("output/dir", self.outputdir)
+        Path(self.outputdir).mkdir(parents=True, exist_ok=True)
+
         if self.outputdir == '':
-           self. parser = ERG_Parser()
+           self.parser = ERG_Parser()
+           
         else:
-            parser = ERG_Parser(self.outputdir)
+            self.parser = ERG_Parser(self.outputdir)
         
         
-        self.append_text('🔄 Start konwersji…')
+        self.append_text('🔄 Starting conversion…')
         QCoreApplication.processEvents()
 
-        buf = io.StringIO()                           # bufor na stdout/stderr
+        buf = io.StringIO()                           # bufor for stdout/stderr
         try:
             with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
-                parser.merge_files_into_ERG(self.BDF_filename, self.excel_filename)
+                self.parser.merge_files_into_ERG(self.BDF_filename, self.excel_filename)
 
             self.append_text(buf.getvalue())          # co wypisał parser
-            self.append_text(f'✅ Utworzono {parser.get_file_name(self.BDF_filename)}.erg')
+            self.append_text(f'✅ Successfully created {self.parser.get_file_name(self.BDF_filename)}.erg')
+        
         except Exception:
-            self.append_text('❌ Błąd:\n' + traceback.format_exc())
-            QMessageBox.critical(self, 'Błąd parsera', 'Konwersja nie powiodła się')
-
-    def clear_console(self):
-        self.console.clear()
+            self.append_text('❌ Error:\n' + traceback.format_exc())
+            QMessageBox.critical(self, 'Parser error', 'Conversion aborted')
 
     def append_text(self, text):
         self.console.append(text)
 
-    def replace_slash(self, adres_pliku, znak_zamiany):
-        # Zamienia wszystkie ukośniki na wybrany znak zamiany
-        nowy_adres = adres_pliku.replace('/', znak_zamiany)
-        return nowy_adres
-
-    #ZAMYKANIE I ZAPISYWANIE USTAWIEŃ
-
     def closeEvent(self, event):
         result = self.confirmCloseDialog()
         if result:
-            self.config_save()
+            # self.config_save()
             event.accept()  
         else:
             event.ignore()
@@ -223,40 +242,7 @@ class Ui(QtWidgets.QMainWindow):
 
         return result == QMessageBox.Yes
 
-    def load_config(self):
-        files = [f for f in os.listdir(self.my_folder) if f.endswith(".ini")]
-        if 'configLast.ini' in files:
-            self.config_load_file('configLast.ini') 
-        else:
-            self.default_settings()
 
-    def config_save(self):
-        file = 'configLast.ini'
-        configLast = ConfigParser()
-        configLast.add_section('path settings')                                    
-        configLast.set('path settings','self.outputdir', 'None')                               
-
-        with open(file,'w') as configfile:
-            configLast.write(configfile)
-
-    def config_load_file(self,file):
-        self.config = ConfigParser()
-        self.config.read(file)
-        self.outputdir = self.config['path settings']['self.outputdir']
-        if not self.outputdir:
-            self.znajdz_ostatni_erg(self.my_folder)
-
-        if file != 'configDefault.ini':
-            self.append_text(f"OUTPUTDIR: {self.outputdir}")
-            self.append_text("\n***POPRZEDNIA SESJA***\n")
-        
-    def default_settings(self):
-        text = '''[path settings]                              
-self.outputdir = None
-'''
-        with open('configDefault.ini','w') as file:
-            file.write(text)
-        self.config_load_file('configDefault.ini')
 
 if __name__ == '__main__':
     import sys
@@ -265,4 +251,4 @@ if __name__ == '__main__':
     ui.show()
     sys.exit(app.exec_())
 
-    # pyinstaller GUI.py  -F --windowed --name ESATAN_Parser --add-data "src;src" 
+    # pyinstaller src/GUI.py  -F --windowed --name ESATAN_Parser --add-data "src;src" 

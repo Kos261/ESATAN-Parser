@@ -1,3 +1,10 @@
+import warnings
+warnings.filterwarnings(
+    "ignore",
+    message="Data Validation extension is not supported and will be removed",
+    category=UserWarning,
+    module=r"openpyxl\.worksheet\._reader",
+)
 import pandas as pd
 import re
 from pathlib import Path
@@ -48,13 +55,13 @@ class ERG_Parser:
             filename = file.split(r'/')[-1]
             filename = filename.split(".")[-2]
             modelname = filename[2:]
-            print(f"\tFile name: {filename}\n")
+            print(f"File name: {filename}\n")
             
         elif "\\" in file:
             filename = file.split("\\")[-1]
             filename = filename.split(".")[-2]
             modelname = filename[2:]
-            print(f"\tFilename: {filename}\n")
+            print(f"Filename: {filename}\n")
         
         return filename, modelname
 
@@ -93,7 +100,7 @@ class ERG_Parser:
 
         self.settings = pd.read_excel(excelfile,sheet_name="Settings",na_filter = Filter)
 
-        print("\n\tExcel data loaded succesfully")
+        print("\nExcel data loaded succesfully")
 
     def load_bdf_data(self, bdffile, debug=False):       
                                         # .123-3
@@ -114,7 +121,7 @@ class ERG_Parser:
                     self.line_to_rect(line)
 
         self.all_geometry = self.ctria3+self.cquad4
-        print("\n\tBDF data loaded succesfully\n")
+        print("\nBDF data loaded succesfully\n")
     
     def split_f8(self, line: str) -> list[str]:
         """List of 8-char fields"""
@@ -132,7 +139,6 @@ class ERG_Parser:
     
     def line_to_point(self, line: str):
         fields = self.split_f8(line)
-        # print(fields)
         id = int(fields[1])
         x = self.f8_to_float(fields[3])
         y = self.f8_to_float(fields[4])
@@ -222,7 +228,7 @@ class ERG_Creator:
 
             self.tekst("END")
 
-            print("\tErg file created succesfully")
+            print("Erg file created succesfully")
 
     def add_shells(self): 
         for figure in self.all_geometry:
