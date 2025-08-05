@@ -38,7 +38,6 @@ class Ui(QtWidgets.QMainWindow):
         self.app_dir = getattr(self, "app_dir", str(Path.cwd()))
         self.outputdir = self.settings.value("output/dir", self.app_dir, type=str)
 
-    
     def darkMode(self):
         # Tworzenie ciemnego motywu
         self.dark_palette = QPalette()
