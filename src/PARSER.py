@@ -47,7 +47,7 @@ class ERG_Parser:
                               hier_first_cols=self.hier_first_cols,
                               outputdir=self.outputdir)
         
-        creator.wrtie_ERG_file()
+        creator.write_ERG_file()
         print("DONE!")
 
     def get_file_name(self, file):
@@ -199,7 +199,7 @@ class ERG_Creator:
         self.shell1 = []
         self.shell2 = []
 
-    def wrtie_ERG_file(self):
+    def write_ERG_file(self):
         self.transform_to_primitives()
 
         with self.file_path.open("w") as self.file:
@@ -239,86 +239,81 @@ class ERG_Creator:
 
     def add_shells(self): 
         for figure in self.all_geometry:
-            
-            Id = figure.get_id()
-            row_hierarchy = self.DFs["hierarchy"][self.DFs["hierarchy"].apply(self.check_id_hier, args=(Id,), axis=1)]
+            # print(figure)
+            fid = figure.get_id()
+            rh = self.DFs["hierarchy"][self.DFs["hierarchy"].apply(self.check_id_hier, args=(fid,), axis=1)]
             
             if isinstance(figure,Triangle):
-                block = f'''
+                header = dedent(f'''
                     GEOMETRY {figure};
                     {figure} = SHELL_TRIANGLE(
                     point1 = point_{figure.p1},
                     point2 = point_{figure.p2},
                     point3 = point_{figure.p3},
-                    )
-                    '''
-                self.add_one_figure_hier(Id, row_hierarchy)
+                    ''')
+                attrs = self.build_attrs_hier(fid, rh)
 
             elif isinstance(figure, Rectangle):
-                block = f'''
+                header = dedent(f'''
                 GEOMETRY {figure};
                 {figure} = SHELL_QUADRILATERAL(
                 point1 = point_{figure.p1},
                 point2 = point_{figure.p2},
                 point3 = point_{figure.p3},
                 point4 = point_{figure.p4},
-                )
-                '''
-                self.add_one_figure_hier(Id,row_hierarchy)
+                ''')
+                attrs = self.build_attrs_hier(fid, rh)
 
-            elif isinstance(figure,Primitive):
-                row_primitive = self.DFs["primitives"][self.DFs["primitives"].apply(self.check_id_prim, args=(Id,),axis=1)]
+            elif isinstance(figure, Primitive):
+                rp = self.DFs["primitives"][self.DFs["primitives"].apply(self.check_id_prim, args=(fid,),axis=1)]
             
                 if figure.node_num == 3:
-                    block = f'''
+                    header = dedent(f'''
                     GEOMETRY {figure};
                     {figure} = {figure.BIG()}(
                     point1 = point_{figure.p1},
                     point2 = point_{figure.p2},
                     point3 = point_{figure.p3},
-                    )
-                    '''
-                
+                    ''')
+                    attrs = self.build_attrs_prim(fid, rp, rh)
+
                 elif figure.node_num == 4:
-                    block = f'''
+                    header = dedent(f'''
                     GEOMETRY {figure};
                     {figure} = {figure.BIG()}(
                     point1 = point_{figure.p1},
                     point2 = point_{figure.p2},
                     point3 = point_{figure.p3},
                     point4 = point_{figure.p4},
-                    )
-                    '''
-                self.add_one_figure_prim(Id,row_primitive,row_hierarchy)
+                    ''')
+                    attrs = self.build_attrs_prim(fid,rp,rh)
             
             else:
                 raise ValueError("Unsupported node_num")
                     
-            self.file.write(dedent(block))
+            self.file.write(header + attrs)
 
     def transform_to_primitives(self):
-        for index, item in enumerate(self.all_geometry):
-            Id = item.get_id()
-            row_primitive = self.DFs["primitives"][self.DFs["primitives"].apply(self.check_id_prim, args=(Id,),axis=1)]
+        for index, fig in enumerate(self.all_geometry):
+            fid = fig.get_id()
+            row_primitive = self.DFs["primitives"][self.DFs["primitives"].apply(self.check_id_prim, args=(fid,),axis=1)]
             
             if not row_primitive.empty:
                 primitive_name = row_primitive["Primitives"].values[0]
 
-                if isinstance(item,Triangle):
-                    p1,p2,p3 = item.get_points()
-                    primitive = Primitive(primitive_name,Id,p1,p2,p3)
+                if isinstance(fig,Triangle):
+                    primitive = Primitive(primitive_name, fid, fig.p1, fig.p2, fig.p3)
                     # self.any_primitive.append(primitive)
                     self.all_geometry[index] = primitive
 
-                elif isinstance(item,Rectangle):
-                    p1,p2,p3,p4 = item.get_points()
-                    primitive = Primitive(primitive_name,Id,p1,p2,p3,p4)
+                elif isinstance(fig, Rectangle):
+                    primitive = Primitive(primitive_name, fid, fig.p1, fig.p2, fig.p3, fig.p4)
                     # self.any_primitive.append(primitive)
                     self.all_geometry[index] = primitive
             else:
                 continue
 
-    def check_id_hier(self,row,moje_id):
+    def check_id_hier(self, row, moje_id):
         if pd.notnull(row['nodenumbers of side 1']) and pd.notnull(row['End Ids']):
             return row['nodenumbers of side 1'] <= moje_id <= row['End Ids']
         else:
@@ -330,17 +325,22 @@ class ERG_Creator:
         else:
             return False
 
-    def add_one_figure_hier(self, moj_id, row_hierarchy):
-        side1, side2 =   str(row_hierarchy["act1"]).strip(),   str(row_hierarchy["act2"]).strip()
-        crit1, crit2 =   str(row_hierarchy["crit1"]).strip(),  str(row_hierarchy["crit2"]).strip()
-        opt1, opt2 =     str(row_hierarchy["coat1"]).strip(),  str(row_hierarchy["coat2"]).strip()
-        color1, color2 = str(row_hierarchy["color1"]).strip(), str(row_hierarchy["color2"]).strip()
-        side1_cap, side2_cap = side1[:1].upper() + side1[1:].lower(),  side2[0].upper() + side2[1:].lower()
+    def build_attrs_hier(self, moj_id, row_hierarchy):
+        rh = row_hierarchy.iloc[0] if isinstance(row_hierarchy, pd.DataFrame) else row_hierarchy
 
-        bulk = str(row_hierarchy["bulk1"]).strip()
-        cond = str(row_hierarchy["throughCond"]).strip()
-        thick = f"{row_hierarchy['thick1'].iloc[0]:.8f}"
+        def cap1(s: str) -> str:
+            s = str(s).strip()
+            return (s[:1].upper() + s[1:].lower()) if s else s
 
+        side1 = cap1(rh["act1"])
+        side2 = cap1(rh["act2"])
+        crit1, crit2 = str(rh["crit1"]).strip(), str(rh["crit2"]).strip()
+        opt1, opt2 = str(rh["coat1"]).strip(), str(rh["coat2"]).strip()
+        color1, color2 = str(rh["color1"]).strip(), str(rh["color2"]).strip()
+        bulk = str(rh["bulk1"]).strip()
+        cond = str(rh["throughCond"]).strip()
+        thick = f"{float(rh['thick1']):.8f}"
+        
         block = f'''
             sense = 1,
             meshType1 = "regular",
@@ -352,15 +352,15 @@ class ERG_Creator:
             analysis_type = "Lumped Parameter",
 
             label1 = "",
-            side1_cap = {side1_cap},
-            criticality1 = {crit1},
+            side1 = "{side1}",
+            criticality1 = "{crit1}",
             nbase1 = {moj_id},
             ndelta1 = 0,
             opt1 = {opt1},
             colour1 = {color1},
 
             label2 = "",
-            side2 = {side2_cap},
+            side2 = {side2},
             criticality2 = {crit2},
             nbase2 = {moj_id},
             ndelta2 = 0,
@@ -378,9 +378,9 @@ class ERG_Creator:
             conductance = 0.00000000,
             emittance = 0.00000000);
         '''
-        self.file.write(dedent(block))
+        return dedent(block)
         
-    def add_one_figure_prim(self, moj_id, row_primitive, row_hierarchy):
+    def build_attrs_prim(self, moj_id, row_primitive, row_hierarchy):
         
         rp = row_primitive.iloc[0]  if isinstance(row_primitive,  pd.DataFrame)  else row_primitive
         rh = row_hierarchy.iloc[0]  if isinstance(row_hierarchy,  pd.DataFrame)  else row_hierarchy
@@ -438,7 +438,7 @@ class ERG_Creator:
             conductance = 0.00000000,
             emittance = 0.00000000);
         """
-        self.file.write(dedent(block))
+        return dedent(block)
 
     def add_bulks(self):
         materials = self.DFs["hierarchy"][['bulk1','bulk2']].stack().dropna().unique()
@@ -491,19 +491,6 @@ class ERG_Creator:
                 else:
                     continue
         return materials
-    
-    # def add_cuts(self):
-    #     for item in self.any_primitive:
-    #         print(item.get_id())
-    #     for index,row in self.DFs["cuts"].iterrows():
-    #         if not row.isnull().all():
-    #             print(row[0],row[1],row[2])
-    #             shell1 = re.findall(r'\b\d+\b',row[1])
-    #             shell2 = re.findall(r'\b\d+\b',row[2])
-    #             print(shell1,shell2)
-
-    #     else:
-    #         return
 
     def fig_in_cuts(self,id_fig,id_in_cuts):
         return  id_fig == id_in_cuts
@@ -575,33 +562,56 @@ class ERG_Creator:
             self.file.write(f"\n\n{self.modelname} = {text};\n")
 
     def text_block(self, text : str):
+
         if text == "PODPIS":
-            self.file.write("\n/*KONSTANTY KLOSIEWICZ*/\n")
+            block = ("\n/*ESATAN PARSER - KONSTANTY KLOSIEWICZ CBK PAN*/\n")
 
         if text == "POINTS":
-            self.file.write("\n/*--------------------------------------*/\n/*                 POINTS               */\n/*--------------------------------------*/\n")
+            block = ("\n/*--------------------------------------*/\n/*                 POINTS               */\n/*--------------------------------------*/\n")
 
         elif text == "OPTICAL":
-            self.file.write("\n\n/*--------------------------------------*/\n/*          OPTICAL PROPERTIES          */\n/*--------------------------------------*/")
+            block = ("\n\n/*--------------------------------------*/\n/*          OPTICAL PROPERTIES          */\n/*--------------------------------------*/")
 
         elif text == "BULKS":
-            self.file.write("\n/*--------------------------------------*/\n/*                 BULKS                */\n/*--------------------------------------*/")
+            block = ("\n/*--------------------------------------*/\n/*                 BULKS                */\n/*--------------------------------------*/")
 
         elif text == "SHELLS":
-            self.file.write("\n/****************************************/\n/*      Start of geometry block         */\n/****************************************/\n\n/*--------------------------------------*/\n/*                 SHELLS               */\n/*--------------------------------------*/")
+            block = ("\n/****************************************/\n/*      Start of geometry block         */\n/****************************************/\n\n/*--------------------------------------*/\n/*                 SHELLS               */\n/*--------------------------------------*/")
 
         elif text == "START GROUP BLOCKS":
-            self.file.write("\n\n/****************************************/\n\n/****************************************/\n/*        Start of group block          */\n/****************************************/\n")
+            block = ("\n\n/****************************************/\n\n/****************************************/\n/*        Start of group block          */\n/****************************************/\n")
 
         elif text == "GROUPS":
-            self.file.write("\n/*--------------------------------------*/\n/*                 GROUPS               */\n/*--------------------------------------*/")
+            block = ("\n/*--------------------------------------*/\n/*                 GROUPS               */\n/*--------------------------------------*/")
 
         
         elif text == "HIERARCHY":
-            self.file.write("\n\n/*--------------------------------------*/\n/*               HIERARCHY              */\n/*--------------------------------------*/")
+            block = ("\n\n/*--------------------------------------*/\n/*               HIERARCHY              */\n/*--------------------------------------*/")
 
         elif text == "ASSEMBLY":
-            self.file.write("\n\n/*--------------------------------------*/\n/*               ASSEMBLY               */\n/*--------------------------------------*/")
+            block = ("\n\n/*--------------------------------------*/\n/*               ASSEMBLY               */\n/*--------------------------------------*/")
 
         elif text == "END":
-            self.file.write("\n/****************************************/\n\nPURGE_MODEL();\nEND_MODEL")
+            block = ("\n/****************************************/\n\nPURGE_MODEL();\nEND_MODEL")
+        
+        self.file.write(block)
+
+    # def add_cuts(self):
+    #     for item in self.any_primitive:
+    #         print(item.get_id())
+    #     for index,row in self.DFs["cuts"].iterrows():
+    #         if not row.isnull().all():
+    #             print(row[0],row[1],row[2])
+    #             shell1 = re.findall(r'\b\d+\b',row[1])
+    #             shell2 = re.findall(r'\b\d+\b',row[2])
+    #             print(shell1,shell2)
+
+    #     else:
+    #         return
+
+
+# if __name__ == "__main__":
+#     bdffile = r"C:\Users\Lenovo\Desktop\Software\PAN\ESATAN_PARSER\models\2_FCU_PSU_v05\2_FCU_PSU_v05.bdf"
+#     excelfile = r"C:\Users\Lenovo\Desktop\Software\PAN\ESATAN_PARSER\models\2_FCU_PSU_v05\2_FCU_PSU_v05.xlsx"
+#     p = ERG_Parser()
+#     p.merge_files_into_ERG(bdffile, excelfile)

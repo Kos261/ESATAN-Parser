@@ -141,8 +141,8 @@ class Ui(QtWidgets.QMainWindow):
         p = Path(fname)
         self.settings.setValue("lastDir/bdf", str(p.parent))
         self.BDF_filename = str(p)
-        self.BDFButton.setText(f"Wybrano \n {p.name}")
-        self.append_text(f"Wybrano {p.name} ")
+        self.BDFButton.setText(f"{p.name}")
+        self.append_text(f"Chosen {p.name} ")
         self.BDFButton.setStyleSheet("background-color: green;")
         QCoreApplication.processEvents()
 
