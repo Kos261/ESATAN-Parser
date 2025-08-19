@@ -1,10 +1,11 @@
-from src.PARSER import ERG_Parser
-from src.GUI import Ui
-from PyQt5 import QtWidgets
-
 
 if __name__ == '__main__':
-    import sys
+
+    from src.PARSER import ERG_Parser
+    from src.GUI import Ui
+    from PyQt5 import QtWidgets
+    import sys    
+    
     app = QtWidgets.QApplication(sys.argv)
     ui = Ui()
     ui.show()
@@ -17,5 +18,5 @@ if __name__ == '__main__':
     --workpath build\.work `
     --specpath build `
     --noconfirm --clean `
-    --icon=logo.ico
+    --icon=assets\logo.ico
     '''

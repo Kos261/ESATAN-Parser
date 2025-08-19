@@ -30,8 +30,7 @@ class ERG_Parser:
         self.shell1 = []
         self.shell2 = []
         self.outputdir = outputdir
-        
-        
+              
     def merge_files_into_ERG(self, bdffile, excelfile):
 
         self.load_excel_data(excelfile)
@@ -66,10 +65,18 @@ class ERG_Parser:
         return filename, modelname
 
     def load_excel_data(self, excelfile):
+        required_sheets = ["HIERARCHY", "MASS", "BULK", "OPTICAL", "PRIMITIVES", "CUTS"]
+
+        with pd.ExcelFile(excelfile) as xls:
+            missing = [s for s in required_sheets if s not in xls.sheet_names]
+
+        if missing:
+            raise ValueError(f"Missing sheets: {missing}")
+        
         na = True #Nan filter
 
         self.DFs["primitives"] = self.load_primitives(excelfile)
-        self.DFs["hierarchy"], self.hier_first_cols, self.pid_index = self.load_hierarchy(excelfile)
+        self.DFs["hierarchy"], self.hier_first_cols, self.pid_index = self.load_hierarchy(excelfile, Filter=na)
 
         self.DFs["cuts"] = pd.read_excel(
             excelfile, sheet_name="CUTS", na_filter=na,
@@ -107,8 +114,8 @@ class ERG_Parser:
         
         return primitives
 
-    def load_hierarchy(self, excelfile, Filter = True):
-        hierarchy = pd.read_excel(excelfile,sheet_name="HIERARCHY",na_filter = Filter)
+    def load_hierarchy(self, excelfile, Filter = True, debug=False):
+        hierarchy = pd.read_excel(excelfile, sheet_name="HIERARCHY", na_filter = Filter)
         pid_index = hierarchy.columns.get_loc("PID")
         hier_first_cols = hierarchy.iloc[:, 0:pid_index]
         hierarchy = hierarchy.loc[:,["nodenumbers of side 1","End Ids","offset","act1","act2","coat1","coat2","bulk1","bulk2","thick1","thick2","unity1","unity2","throughCond","conductance","emittance","mass1","mass2","crit1","crit2","color1","color2"]]
@@ -116,7 +123,9 @@ class ERG_Parser:
         new_column_names = [f'Col{i+1}' for i in range(len(hier_first_cols.columns))] 
         hier_first_cols.columns = new_column_names                                   
         hierarchy = pd.concat([hier_first_cols, hierarchy], axis = 1)       
-
+        
+        if debug:
+            print(hierarchy)
         return hierarchy, hier_first_cols, pid_index
 
     def load_bdf_data(self, bdffile, debug=False):       
@@ -135,6 +144,10 @@ class ERG_Parser:
                     self.line_to_rect(line)
 
         self.all_geometry = self.ctria3+self.cquad4
+
+        if debug:
+            print(self.all_geometry)
+
         print("\nBDF data loaded succesfully\n")
     
     def split_f8(self, line: str) -> list[str]:
@@ -195,7 +208,6 @@ class ERG_Creator:
         self.all_geometry = geometry
         self.hier_first_cols = hier_first_cols
         self.DFs = DFs
-       
         self.shell1 = []
         self.shell2 = []
 
@@ -238,11 +250,11 @@ class ERG_Creator:
             print("Erg file created succesfully")
 
     def add_shells(self): 
+        
         for figure in self.all_geometry:
-            # print(figure)
+            
             fid = figure.get_id()
             rh = self.DFs["hierarchy"][self.DFs["hierarchy"].apply(self.check_id_hier, args=(fid,), axis=1)]
-            
             if isinstance(figure,Triangle):
                 header = dedent(f'''
                     GEOMETRY {figure};
@@ -291,7 +303,7 @@ class ERG_Creator:
             else:
                 raise ValueError("Unsupported node_num")
                     
-            self.file.write(header + attrs)
+            self.file.write(header + attrs.lstrip())
 
     def transform_to_primitives(self):
         for index, fig in enumerate(self.all_geometry):
@@ -313,33 +325,49 @@ class ERG_Creator:
             else:
                 continue
 
-    def check_id_hier(self, row, moje_id):
+    def check_id_hier(self, row, fid):
+        '''checks if figure id is in interval ex. is 2011 in (2000, 2200)?'''
         if pd.notnull(row['nodenumbers of side 1']) and pd.notnull(row['End Ids']):
-            return row['nodenumbers of side 1'] <= moje_id <= row['End Ids']
+            return row['nodenumbers of side 1'] <= fid <= row['End Ids']
         else:
             return False
         
-    def check_id_prim(self,row,moje_id):
+    def check_id_prim(self, row, fid):
         if pd.notnull(row["node number"]):
-            return row["node number"] == moje_id
+            return row["node number"] == fid
         else:
             return False
 
-    def build_attrs_hier(self, moj_id, row_hierarchy):
+    def build_attrs_hier(self, fid, row_hierarchy):
         rh = row_hierarchy.iloc[0] if isinstance(row_hierarchy, pd.DataFrame) else row_hierarchy
 
         def cap1(s: str) -> str:
+            '''string -> String'''
             s = str(s).strip()
             return (s[:1].upper() + s[1:].lower()) if s else s
 
-        side1 = cap1(rh["act1"])
-        side2 = cap1(rh["act2"])
-        crit1, crit2 = str(rh["crit1"]).strip(), str(rh["crit2"]).strip()
-        opt1, opt2 = str(rh["coat1"]).strip(), str(rh["coat2"]).strip()
-        color1, color2 = str(rh["color1"]).strip(), str(rh["color2"]).strip()
-        bulk = str(rh["bulk1"]).strip()
-        cond = str(rh["throughCond"]).strip()
-        thick = f"{float(rh['thick1']):.8f}"
+        side1           = cap1(rh["act1"])
+        side2           = cap1(rh["act2"])
+        crit1, crit2    = str(rh["crit1"]).strip(), str(rh["crit2"]).strip()
+        opt1, opt2      = str(rh["coat1"]).strip(), str(rh["coat2"]).strip()
+        color1, color2  = str(rh["color1"]).strip(), str(rh["color2"]).strip()
+        bulk            = str(rh["bulk1"]).strip()
+        cond            = str(rh["throughCond"]).strip()
+        thick           = f"{float(rh['thick1']):.8f}"
+        u1 = rh['unity1']
+        u2 = rh['unity2']
+
+        if pd.isna(u1) and pd.isna(u2): # unity1=NaN and unity2=NaN
+            unity1 = unity2 = fid
+        
+        elif pd.isna(u1) and not pd.isna(u2): # unity1=NaN and unity2=int
+            unity1 = unity2 = int(u2)
+            
+        elif not pd.isna(u1) and pd.isna(u2): # unity1=int and unity2=NaN
+            unity1 = unity2 = int(u1)
+        else:
+            unity1 = int(u1)
+            unity2 = int(u2)
         
         block = f'''
             sense = 1,
@@ -350,23 +378,20 @@ class ERG_Creator:
             nodes2 = 1,
             ratio2 = 1.00000000,
             analysis_type = "Lumped Parameter",
-
             label1 = "",
             side1 = "{side1}",
             criticality1 = "{crit1}",
-            nbase1 = {moj_id},
+            nbase1 = {unity1},
             ndelta1 = 0,
             opt1 = {opt1},
-            colour1 = {color1},
-
+            colour1 = "{color1}:,
             label2 = "",
             side2 = {side2},
-            criticality2 = {crit2},
-            nbase2 = {moj_id},
+            criticality2 = "{crit2}",
+            nbase2 = {unity2},
             ndelta2 = 0,
             opt2 = {opt2},
-            colour2 = {color2},
-            
+            colour2 = "{color2}",
             composition = "SINGLE",
             bulk = {bulk},
             thick = {thick},
@@ -374,7 +399,7 @@ class ERG_Creator:
             thick1 = 0.00000000,
             bulk2 = [-10000.00000000, -10000.00000000, -10000.00000000],
             thick2 = 0.00000000,
-            through_cond = {cond},
+            through_cond = "{cond}",
             conductance = 0.00000000,
             emittance = 0.00000000);
         '''
@@ -395,6 +420,8 @@ class ERG_Creator:
         crit1, crit2 =   str(rh["crit1"]).strip(),  str(rh["crit2"]).strip()
         opt1, opt2 =     str(rh["coat1"]).strip(),  str(rh["coat2"]).strip()
         color1, color2 = str(rh["color1"]).strip(), str(rh["color2"]).strip()
+        unity1, unity2 = str(rh["unity1"].strip()), str(rh["unity2"].strip())
+
         side1_cap, side2_cap = side1[:1].upper() + side1[1:].lower(),  side2[0].upper() + side2[1:].lower()
 
         bulk = str(rh["bulk1"]).strip()
@@ -410,7 +437,6 @@ class ERG_Creator:
             nodes2 = {nodes2},
             ratio2 = {ratio2},
             analysis_type = "Lumped Parameter",
-
             label1 = "",
             side1 = "{side1_cap}",
             criticality1 = "{crit1}",
@@ -418,7 +444,6 @@ class ERG_Creator:
             ndelta1 = 0,
             opt1 = {opt1},
             colour1 = "{color1}",
-
             label2 = "",
             side2 = "{side2_cap}",
             criticality2 = "{crit2}",
@@ -426,7 +451,6 @@ class ERG_Creator:
             ndelta2 = 0,
             opt2 = {opt2},
             colour2 = "{color2}",
-
             composition = "SINGLE",
             bulk = {bulk},
             thick = {thick},
@@ -434,7 +458,7 @@ class ERG_Creator:
             thick1 = 0.00000000,
             bulk2 = [-10000.00000000, -10000.00000000, -10000.00000000],
             thick2 = 0.00000000,
-            through_cond = {cond},
+            through_cond = "{cond}",
             conductance = 0.00000000,
             emittance = 0.00000000);
         """
