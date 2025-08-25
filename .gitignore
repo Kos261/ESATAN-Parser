@@ -9,3 +9,5 @@ Esatan_case_folder
 .pytest_cache
 .venv
 output
+idea
+.idea
