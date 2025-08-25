@@ -11,12 +11,15 @@ if __name__ == '__main__':
     ui.show()
     sys.exit(app.exec_())
     
+    
+
+
     '''
-    pyinstaller Parser_runner.py `
+    uv run pyinstaller .\Parser_runner.py `
     -F --windowed --name ESATAN_Parser `
-    --distpath build\out `
-    --workpath build\.work `
-    --specpath build `
+    --distpath .\build\out --workpath .\build\.work --specpath . `
     --noconfirm --clean `
-    --icon=assets\logo.ico
+    --hidden-import PyQt5.sip `
+    --collect-all PyQt5 `
+    --icon "$PWD\assets\PARSER.ico"
     '''
