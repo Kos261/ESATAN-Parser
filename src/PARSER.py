@@ -227,7 +227,7 @@ class ERG_Creator:
             self.text_block("POINTS")
             for p in self.points:
                 x,y,z = p.get_pos()
-                self.file.write(f"POINT point_{p.get_id()} = [{x}, {y}, {z}];\n")
+                self.file.write(f"POINT point_{p.get_id()} = [{x:0.8f}, {y:0.8f}, {z:0.8f}];\n")
             
             self.text_block("SHELLS")
             self.add_shells()
