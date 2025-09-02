@@ -9,6 +9,7 @@ import pandas as pd
 import re
 from textwrap import dedent
 from pathlib import Path
+import datetime
 from src.geometry import Point, Primitive, Triangle, Rectangle
 
 
@@ -213,10 +214,11 @@ class ERG_Creator:
 
     def write_ERG_file(self):
         self.transform_to_primitives()
-
+        
         with self.file_path.open("w") as self.file:
             self.file.write(f"BEGIN_MODEL {self.modelname}\n")
             self.text_block("PODPIS")
+            self.text_block("TIMESTAMP")
 
             self.text_block("BULKS")
             self.add_bulks()
@@ -384,9 +386,9 @@ class ERG_Creator:
             nbase1 = {unity1},
             ndelta1 = 0,
             opt1 = {opt1},
-            colour1 = "{color1}:,
+            colour1 = "{color1}",
             label2 = "",
-            side2 = {side2},
+            side2 = "{side2}",
             criticality2 = "{crit2}",
             nbase2 = {unity2},
             ndelta2 = 0,
@@ -586,11 +588,15 @@ class ERG_Creator:
             self.file.write(f"\n\n{self.modelname} = {text};\n")
 
     def text_block(self, text : str):
-
+        
         if text == "PODPIS":
-            block = ("\n/*ESATAN PARSER - KONSTANTY KLOSIEWICZ CBK PAN*/\n")
+            block = ("\n/*ESATAN PARSER - Author: Konstanty Klosiewicz CBK PAN*/\n")
 
-        if text == "POINTS":
+        elif text == "TIMESTAMP":
+            now = str(datetime.datetime.now())
+            block = f"\n/* TIMESTAMP: {now} */\n"
+
+        elif text == "POINTS":
             block = ("\n/*--------------------------------------*/\n/*                 POINTS               */\n/*--------------------------------------*/\n")
 
         elif text == "OPTICAL":

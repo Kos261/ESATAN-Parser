@@ -11,3 +11,6 @@ Esatan_case_folder
 output
 idea
 .idea
+ESATAN_PARSER.code-workspace
+.vscode
+.vscode/tasks.json
