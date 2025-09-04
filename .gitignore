@@ -1,0 +1,16 @@
+models
+build
+tests
+pycache
+__pycache__
+Esatan_case_folder
+# models
+.exe
+.pytest_cache
+.venv
+output
+idea
+.idea
+ESATAN_PARSER.code-workspace
+.vscode
+.vscode/tasks.json
