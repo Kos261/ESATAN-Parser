@@ -59,16 +59,33 @@ This saves time and reduces errors, letting engineers move directly to thermal c
 
 ## 📖 Usage
 
-<!-- ### CLI (not implemented)
 ```bash
-uv run -m src.PARSER --input model.bdf --excel materials.xlsx --output output.erg
-``` -->
+$ git clone https://github.com/Kos261/ESATAN-Parser.git
+```
 
-<!-- ### GUI -->
 
-For easier use and automatic file transfer into ESATAN case folders, run the PARSER-GUI. Run command
+Install UV (only first time). UV is better pip package manager alternative for Python. For more details reach [https://docs.astral.sh/uv/]
+```bash
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+uv sync
+```
+
+### For easier use and automatic file transfer into ESATAN case folders, run the PARSER-GUI. Run command
 ```bash
 uv run -m  Parser_runner
-python -m Parser_runner
-python Parser_runner.py
+```
+
+<!-- ```bash
+uv run -m Parser_runner_CLI --bdf model.bdf --excel materials.xlsx --output output.erg
+``` -->
+
+If you want to compile this project into standalone executable file, copy this command into console while in main directory of repository:
+```bash
+uv run pyinstaller .\Parser_runner.py `
+-F --windowed --name ESATAN_Parser `
+--distpath .\build\out --workpath .\build\.work --specpath . `
+--noconfirm --clean `
+--hidden-import PyQt5.sip `
+--collect-all PyQt5 `
+--icon "$PWD\assets\PARSER.ico"
 ```

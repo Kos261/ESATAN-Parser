@@ -18,5 +18,8 @@ dependencies = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.uv.required-environments]
+win_amd64 = true
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/esatan_parser"]
